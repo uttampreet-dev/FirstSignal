@@ -31,6 +31,7 @@ The platform continuously evaluates conversations, retrieves historical context,
 ## Multi-Agent Architecture
 
 FirstSignal uses 6 specialized AI agents collaborating on every interaction:
+```text
 
 Customer Message
         ↓
@@ -57,7 +58,7 @@ Customer Message
 ┌─────────────────┐
 │  Voice Agent    │ VAPI browser voice callbacks for critical escalations
 └─────────────────┘
-
+```
 ---
 
 ## Core Features
