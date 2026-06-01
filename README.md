@@ -31,30 +31,31 @@ The platform continuously evaluates conversations, retrieves historical context,
 ## Multi-Agent Architecture
 
 FirstSignal uses 6 specialized AI agents collaborating on every interaction:
+
 Customer Message
-↓
+        ↓
 ┌─────────────────┐
-│ Sentiment Agent │ → Scores every message 0-100, detects frustration/churn risk
+│ Sentiment Agent │  Scores every message 0-100, detects frustration/churn risk
 └────────┬────────┘
-↓
+         ↓
 ┌─────────────────┐
-│  Memory Agent   │ → Retrieves full customer history across sessions via pgvector
+│  Memory Agent   │  Retrieves full customer history across sessions via pgvector
 └────────┬────────┘
-↓
-┌──────────────────────┐
-│ Retention Agent      │ → Evaluates churn probability, decides intervention
-└────────┬─────────────┘
-↓
-┌──────────────────┐
-│ Resolution Agent │ → Executes refunds, discounts, redeliveries autonomously
-└────────┬─────────┘
-↓
-┌──────────────────┐
-│ Proactive Agent  │ → Cron-based outreach before customers complain
-└────────┬─────────┘
-↓
+         ↓
 ┌─────────────────┐
-│  Voice Agent    │ → VAPI browser voice callbacks for critical escalations
+│ Retention Agent │  Evaluates churn probability, decides intervention
+└────────┬────────┘
+         ↓
+┌──────────────────┐
+│ Resolution Agent │ Executes refunds, discounts, redeliveries autonomously
+└────────┬─────────┘
+         ↓
+┌──────────────────┐
+│ Proactive Agent  │ Cron-based outreach before customers complain
+└────────┬─────────┘
+         ↓
+┌─────────────────┐
+│  Voice Agent    │ VAPI browser voice callbacks for critical escalations
 └─────────────────┘
 
 ---
