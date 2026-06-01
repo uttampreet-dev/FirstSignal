@@ -2,7 +2,12 @@
 import { useState } from 'react'
 import { Send } from 'lucide-react'
 
-export default function ChatInput({ onSend, disabled }) {
+interface ChatInputProps {
+  onSend: (text: string) => void
+  disabled: boolean
+}
+
+export default function ChatInput({ onSend, disabled }: ChatInputProps) {
   const [value, setValue] = useState('')
 
   const handleSend = () => {
