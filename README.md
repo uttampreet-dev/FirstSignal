@@ -28,6 +28,14 @@ The platform continuously evaluates conversations, retrieves historical context,
 
 ---
 
+## Meet Aria
+
+Aria is the customer intelligence agent powering First Signal.
+
+She analyzes sentiment, retrieves customer history, initiates recovery workflows, and escalates critical situations through voice interactions when necessary.
+
+---
+
 ## Multi-Agent Architecture
 
 FirstSignal uses 6 specialized AI agents collaborating on every interaction:
@@ -102,7 +110,7 @@ For critical interactions, Aria initiates live voice calls directly from the bro
 | 3 | Retention Agent | Flags: immediate intervention required |
 | 4 | Resolution Agent | Applies 15% discount, generates REF-1780042847773 |
 | 5 | Voice Agent | Initiates browser voice callback |
-| 6 | Dashboard | Updates live — issue resolved, ₹0 human time |
+| 6 | Dashboard | Updates live — Issue resolved autonomously, no human intervention required |
 
 ---
 
@@ -129,6 +137,7 @@ For critical interactions, Aria initiates live voice calls directly from the bro
 ---
 
 ## Project Structure
+```text
 firstsignal/
 ├── app/
 │   ├── page.tsx              # Landing page with live animated demo
@@ -151,7 +160,7 @@ firstsignal/
 ├── action-detector.ts    # Retention Agent
 ├── resolution.ts         # Resolution Agent
 └── proactive-outreach.ts # Proactive Agent
-
+```
 ---
 
 ## Setup
@@ -185,14 +194,23 @@ CRON_SECRET=
 
 ---
 
-## Evaluation Criteria
+## Evaluation Criteria Alignment
 
-| Criteria | Implementation |
-|----------|---------------|
-| **Innovation & Novelty (30%)** | Multi-agent architecture, cross-session memory, proactive outreach, voice callbacks — combination not seen in typical submissions |
-| **Real-World Applicability (25%)** | Built for D2C e-commerce, Indian market context, real order/return workflows |
-| **Technical Architecture (25%)** | 6 specialized agents, pgvector memory, function calling, cron jobs, WebSocket real-time updates |
-| **Documentation Clarity (20%)** | Architecture diagrams, setup guide, live demo, inline code documentation |
+| Criteria | How First Signal Addresses It |
+|-----------|------------------------------|
+| **Innovation & Novelty (30%)** | Combines customer memory, sentiment intelligence, proactive outreach, autonomous resolution workflows, and AI voice escalation into a unified customer care platform. |
+| **Real-World Applicability (25%)** | Designed specifically for D2C businesses facing customer churn, delayed deliveries, refund requests, and customer retention challenges. |
+| **Technical Architecture (25%)** | Built using modular AI services, vector memory (pgvector), workflow automation, function calling, voice integration, and real-time dashboard analytics. |
+| **Documentation Clarity (20%)** | Includes architecture documentation, setup instructions, deployment guide, source code organization, and live demonstrations. |
+---
+
+## Why First Signal Is Different
+
+Traditional customer support bots answer questions.
+
+First Signal focuses on customer retention.
+
+Instead of reacting after a customer becomes dissatisfied, the platform identifies early warning signals, retrieves historical context, predicts churn risk, and initiates recovery actions before customer relationships break down.
 
 ---
 
