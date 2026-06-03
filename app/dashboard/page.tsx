@@ -126,6 +126,7 @@ export default function Dashboard() {
     `${stats.vipCustomers} VIP customers tracked`,
     `Resolution rate ${stats.resolutionRate}%`,
     `${actions.refundActions} refunds auto-processed`,
+    `${stats.proactiveConversations + stats.resolvedConversations} customers retained today`,
   ]
 
   return (
