@@ -166,7 +166,7 @@ firstsignal/
 ## Setup
 
 ```bash
-git clone https://github.com/uttampreet-dev/firstsignal.git
+git clone https://github.com/uttampreet-dev/FirstSignal.git
 cd firstsignal
 npm install
 cp .env.example .env.local
