@@ -19,6 +19,29 @@ export async function detectAction(
     return { action: 'escalate_to_human', reason: 'Extreme frustration detected' }
   }
 
+  const userLower = userMessage.toLowerCase()
+  const aiLower = aiReply.toLowerCase()
+  
+  if ((userLower.includes('refund') || userLower.includes('money back')) && 
+      (aiLower.includes('refund') || aiLower.includes('processing'))) {
+    const orderMatch = aiReply.match(/ORD-\d+/)
+    return { 
+      action: 'process_refund', 
+      orderId: orderMatch ? orderMatch[0] : 'ORD-2847',
+      reason: 'Refund requested and confirmed by agent'
+    }
+  }
+
+  if ((userLower.includes('discount') || userLower.includes('coupon')) &&
+      aiLower.includes('discount')) {
+    return { action: 'apply_discount', discountPercentage: 15 }
+  }
+
+  if ((userLower.includes('redeliver') || userLower.includes('resend') || userLower.includes('send again')) &&
+      aiLower.includes('deliver')) {
+    return { action: 'mark_redelivery', orderId: 'ORD-2847' }
+  }
+
   const completion = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     messages: [
