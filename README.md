@@ -4,9 +4,25 @@
 
 An AI-powered customer intelligence platform that helps D2C brands identify at-risk customers, automate issue resolution, and proactively retain customers through memory, sentiment analysis, intelligent workflows, and voice escalation.
 
-**Live Demo:** https://first-signal-six.vercel.app  
-**Chat:** https://first-signal-six.vercel.app/chat  
-**Dashboard:** https://first-signal-six.vercel.app/dashboard
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-14-black?style=flat-square&logo=next.js" />
+  <img src="https://img.shields.io/badge/TypeScript-5-blue?style=flat-square&logo=typescript" />
+  <img src="https://img.shields.io/badge/Supabase-PostgreSQL-green?style=flat-square&logo=supabase" />
+  <img src="https://img.shields.io/badge/Groq-LLaMA--3.3--70B-orange?style=flat-square" />
+  <img src="https://img.shields.io/badge/VAPI-Voice-purple?style=flat-square" />
+  <img src="https://img.shields.io/badge/Deployed-Vercel-black?style=flat-square&logo=vercel" />
+  <img src="https://img.shields.io/badge/License-MIT-yellow?style=flat-square" />
+</p>
+
+## Try FirstSignal
+
+**Live Demo:** https://first-signal-six.vercel.app
+
+**Customer Chat:** https://first-signal-six.vercel.app/chat
+
+**Mission Control Dashboard:** https://first-signal-six.vercel.app/dashboard
+
+[![FirstSignal Mission Control Dashboard](https://first-signal-six.vercel.app/og-image.png)](https://first-signal-six.vercel.app)
 
 ---
 
@@ -67,6 +83,20 @@ Customer Message
 │  Voice Agent    │ VAPI browser voice callbacks for critical escalations
 └─────────────────┘
 ```
+---
+
+## How It Works
+
+1. **Customer sends a message** → Chat API receives it
+2. **Sentiment Agent scores it** (0-100) → Detects frustration, churn risk, buying intent
+3. **Memory Agent retrieves context** → Past complaints, order history, sentiment patterns from pgvector
+4. **Groq LLaMA generates response** → Enriched with full customer context
+5. **Retention Agent detects intent** → Identifies if refund, discount, or escalation needed
+6. **Resolution Agent executes action** → Real database action fired autonomously
+7. **Proactive Agent monitors** → Cron job checks for at-risk customers every cycle
+8. **Voice Agent escalates** → VAPI browser call initiated for critical cases
+9. **Dashboard updates live** → Mission Control reflects all changes in real time
+
 ---
 
 ## Core Features
@@ -211,6 +241,19 @@ Traditional customer support bots answer questions.
 First Signal focuses on customer retention.
 
 Instead of reacting after a customer becomes dissatisfied, the platform identifies early warning signals, retrieves historical context, predicts churn risk, and initiates recovery actions before customer relationships break down.
+
+## How FirstSignal Compares
+
+| Feature | Traditional Chatbot | FirstSignal |
+|---------|-------------------|-------------|
+| Remembers past conversations | ❌ | ✅ Cross-session memory |
+| Detects frustration | ❌ | ✅ Real-time scoring |
+| Proactive outreach | ❌ | ✅ Cron-triggered |
+| Processes refunds | ❌ | ✅ Autonomous execution |
+| Voice escalation | ❌ | ✅ Browser-based VAPI |
+| Customer health scores | ❌ | ✅ Calculated in real time |
+| AI-generated insights | ❌ | ✅ From live data |
+| Human time required | High | Zero for most cases |
 
 ---
 
