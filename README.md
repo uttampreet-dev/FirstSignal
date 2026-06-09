@@ -22,7 +22,11 @@ An AI-powered customer intelligence platform that helps D2C brands identify at-r
 
 **Mission Control Dashboard:** https://first-signal-six.vercel.app/dashboard
 
-[![FirstSignal Mission Control Dashboard](https://first-signal-six.vercel.app/og-image.png)](https://first-signal-six.vercel.app)
+<p align="center">
+  <a href="https://first-signal-six.vercel.app">
+    <img src="public/demo.gif" width="800" alt="FirstSignal Demo">
+  </a>
+</p>
 
 ---
 
@@ -147,9 +151,10 @@ For critical interactions, Aria initiates live voice calls directly from the bro
 ## Business Impact
 
 - Reduce support workload through autonomous resolution
-- Improve customer satisfaction with proactive outreach
-- Increase retention by detecting churn signals early
-- Escalate only when human judgment is genuinely needed
+- Detect churn signals before customers leave
+- Increase retention through proactive outreach
+- Improve CSAT through memory-powered interactions
+- Escalate only the highest-risk conversations to humans
 
 ---
 
@@ -215,12 +220,6 @@ NEXT_PUBLIC_VAPI_PUBLIC_KEY=
 NEXT_PUBLIC_VAPI_ASSISTANT_ID=
 CRON_SECRET=
 ```
-
----
-
-## Hackathon Category
-
-**Customer Care Bot** — FirstSignal autonomously manages customer relationships through intelligent issue detection, proactive intervention, automated resolution, and voice escalation.
 
 ---
 
