@@ -103,6 +103,44 @@ Customer Message
 
 ---
 
+## System Flow
+
+```mermaid
+flowchart TD
+    A([Customer Message]) --> B[Sentiment Agent\nScores 0-100]
+    B --> C[Memory Agent\nRetrieves history]
+    C --> D[Groq LLaMA-3.3-70B\nGenerates response]
+    D --> E[Retention Agent\nDetects action intent]
+    E --> F{Action needed?}
+    F -->|Refund| G[Resolution Agent\nProcesses refund]
+    F -->|Discount| H[Resolution Agent\nApplies discount]
+    F -->|Escalation| I[Voice Agent\nVAPI callback]
+    F -->|None| J[Response sent]
+    G --> K[(Supabase DB\nUpdated)]
+    H --> K
+    I --> L[Transcript saved\nto memory]
+    K --> M[Dashboard\nLive update]
+    L --> M
+    
+    N([Proactive Agent\nCron job]) --> O{Delayed orders?}
+    O -->|Yes| P[Initiates outreach\nbefore complaint]
+```
+---
+
+```mermaid
+flowchart LR
+    Chat[Chat API] --> Sentiment[Sentiment Score]
+    Chat --> Memory[Memory Store]
+    Chat --> Actions[Action Log]
+    Sentiment --> Dashboard[Mission Control]
+    Memory --> Dashboard
+    Actions --> Dashboard
+    Dashboard --> HealthScore[Customer Health Score]
+    Dashboard --> Insights[AI Insights]
+    Dashboard --> VoicePanel[Voice Callback]
+```
+---
+
 ## Core Features
 
 ### Real-Time Sentiment Intelligence
