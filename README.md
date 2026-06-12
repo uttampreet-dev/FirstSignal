@@ -106,7 +106,7 @@ Customer Message
 ## System Flow
 
 ```mermaid
-flowchart TD
+flowchart LR
     A([Customer Message]) --> B[Sentiment Agent\nScores 0-100]
     B --> C[Memory Agent\nRetrieves history]
     C --> D[Groq LLaMA-3.3-70B\nGenerates response]
