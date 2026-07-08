@@ -1,5 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
+import { getBrand, type Brand } from '@/lib/brands'
 
 const DEMO_CUSTOMER_ID = '11111111-1111-1111-1111-111111111111'
 
@@ -14,23 +15,36 @@ function TypingDots() {
   )
 }
 
-function SentimentBar({ score }: { score: number }) {
+function SentimentBar({ score, language }: { score: number, language?: string }) {
   const color = score > 60 ? '#10b981' : score > 40 ? '#f59e0b' : score > 20 ? '#f97316' : '#ef4444'
   const label = score > 60 ? 'Positive' : score > 40 ? 'Neutral' : score > 20 ? 'At risk' : 'Critical'
+  const isHindi = language === 'hindi' || language === 'hinglish'
   return (
     <div className="flex items-center gap-2 px-4 py-1.5 border-b border-[#141414]">
       <span className="text-[9px] text-[#444] uppercase tracking-widest">Sentiment</span>
       <div className="flex-1 h-0.5 bg-[#1a1a1a] rounded overflow-hidden">
         <div className="h-full rounded transition-all duration-700" style={{width:`${score}%`, background: color}}></div>
       </div>
+      {language && (
+        isHindi ? (
+          <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 tracking-widest">
+            HI · हिंदी
+          </span>
+        ) : (
+          <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-[#1a1a1a] border border-[#222] text-[#555] tracking-widest">
+            EN
+          </span>
+        )
+      )}
       <span className="text-[9px] font-mono transition-colors duration-700" style={{color}}>{score}/100 · {label}</span>
     </div>
   )
 }
 
-export default function ChatWidget() {
+export default function ChatWidget({ brand }: { brand?: Brand }) {
+  const activeBrand = brand ?? getBrand()
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: "Hi! I'm Aria from ShopEase support. How can I help you today?", sentiment: null }
+    { role: 'assistant', content: `Hi! I'm ${activeBrand.agentName} from ${activeBrand.name} support. How can I help you today?`, sentiment: null }
   ])
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -38,6 +52,7 @@ export default function ChatWidget() {
   const [sentiment, setSentiment] = useState(50)
   const [isEscalated, setIsEscalated] = useState(false)
   const [lastAction, setLastAction] = useState<any>(null)
+  const [detectedLang, setDetectedLang] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -57,7 +72,7 @@ export default function ChatWidget() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, customerId: DEMO_CUSTOMER_ID, conversationId })
+        body: JSON.stringify({ message: text, customerId: DEMO_CUSTOMER_ID, conversationId, brandId: activeBrand.id })
       })
       const data = await res.json()
 
@@ -65,6 +80,7 @@ export default function ChatWidget() {
       if (data.sentiment?.score) setSentiment(data.sentiment.score)
       if (data.isEscalated) setIsEscalated(true)
       if (data.action?.action && data.action.action !== 'none') setLastAction(data.action)
+      if (data.detectedLanguage) setDetectedLang(data.detectedLanguage)
 
       setMessages(prev => [...prev, {
         role: 'assistant',
@@ -90,14 +106,16 @@ export default function ChatWidget() {
       <div className="px-4 py-3 border-b border-[#141414] flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="relative">
-            <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
-              <span className="text-emerald-400 text-xs font-medium">A</span>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center border"
+              style={{ backgroundColor: `${activeBrand.primaryColor}22`, borderColor: `${activeBrand.primaryColor}4d` }}>
+              <span className="text-xs font-medium" style={{ color: activeBrand.primaryColor }}>{activeBrand.agentName[0]}</span>
             </div>
-            <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-500 border-2 border-[#080808]"></div>
+            <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full border-2 border-[#080808]"
+              style={{ backgroundColor: activeBrand.primaryColor }}></div>
           </div>
           <div>
-            <p className="text-xs font-medium text-[#e5e5e5]">Aria — ShopEase Support</p>
-            <p className="text-[10px] text-emerald-500">● Online · Powered by FirstSignal</p>
+            <p className="text-xs font-medium text-[#e5e5e5]">{activeBrand.agentName} — {activeBrand.name} Support</p>
+            <p className="text-[10px]" style={{ color: activeBrand.primaryColor }}>● Online · Powered by FirstSignal</p>
           </div>
         </div>
         {isEscalated && (
@@ -109,7 +127,7 @@ export default function ChatWidget() {
       </div>
 
       {/* Sentiment bar */}
-      <SentimentBar score={sentiment} />
+      <SentimentBar score={sentiment} language={detectedLang ?? undefined} />
 
       {/* Action banner */}
       {lastAction && (
@@ -125,7 +143,7 @@ export default function ChatWidget() {
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} gap-2`}>
             {msg.role === 'assistant' && (
               <div className="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-emerald-400 text-[9px]">A</span>
+                <span className="text-emerald-400 text-[9px]">{activeBrand.agentName[0]}</span>
               </div>
             )}
             <div className={`max-w-[78%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${
@@ -157,6 +175,12 @@ export default function ChatWidget() {
           {['Where is my order?', 'I want a refund', 'Wrong item delivered', 'Track my order'].map(q => (
             <button key={q} onClick={() => sendMessage(q)}
               className="text-[10px] px-2.5 py-1 border border-[#222] text-[#666] rounded-full hover:border-emerald-500/30 hover:text-emerald-500 transition-colors">
+              {q}
+            </button>
+          ))}
+          {['मेरा ऑर्डर कहाँ है?', 'मुझे रिफंड चाहिए', 'गलत आइटम मिला'].map(q => (
+            <button key={q} onClick={() => sendMessage(q)}
+              className="text-[10px] px-2.5 py-1 border border-emerald-500/20 text-[#777] rounded-full hover:border-emerald-500/40 hover:text-emerald-500 transition-colors">
               {q}
             </button>
           ))}

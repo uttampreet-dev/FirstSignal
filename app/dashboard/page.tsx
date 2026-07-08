@@ -2,6 +2,47 @@
 import { useEffect, useState, useRef } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import VoiceDemo from '@/components/VoiceDemo'
+import { supabase } from '@/lib/supabase'
+import DemoTour, { type TourStep } from '@/components/DemoTour'
+
+const TOUR_STEPS: TourStep[] = [
+  {
+    tab: 'live',
+    selector: 'ticker',
+    title: 'Live Feed Ticker',
+    description: 'A real-time pulse of everything happening across your customer base — conversations monitored, escalations, cost saved, and retention wins as they occur.',
+  },
+  {
+    tab: 'live',
+    selector: 'sentiment-ring',
+    title: 'At-Risk Sentiment Ring',
+    description: 'The single most at-risk customer right now, scored 0–100. When it drops into the red, FirstSignal flags churn risk and can escalate automatically.',
+  },
+  {
+    tab: 'live',
+    selector: 'conversations',
+    title: 'Conversation Feed',
+    description: 'Every active conversation with live sentiment. Click any row to expand the full transcript inline and see exactly how the AI handled it.',
+  },
+  {
+    tab: 'live',
+    selector: 'voice',
+    title: 'Voice Callback',
+    description: 'For critical escalations, Aria places an AI voice call to the customer directly from the browser — no phone system required.',
+  },
+  {
+    tab: 'analytics',
+    selector: 'ai-insights',
+    title: 'AI Insights',
+    description: 'Narrative intelligence generated from live data — churn drivers, VIP risk, and retention value, written in plain language for instant decisions.',
+  },
+  {
+    tab: 'customers',
+    selector: 'health-scores',
+    title: 'Customer Health Scores',
+    description: 'A health score for every customer, blending order history, spend, and sentiment so you can prioritise who needs attention before they churn.',
+  },
+]
 function ConversationDetail({ conversationId, onClose }: { conversationId: string, onClose: () => void }) {
   const [messages, setMessages] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -89,6 +130,8 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('live')
   const [selectedConv, setSelectedConv] = useState<any>(null)
   const [pulse, setPulse] = useState(false)
+  const [realtime, setRealtime] = useState(false)
+  const [tourOpen, setTourOpen] = useState(false)
 
   const fetchData = async () => {
     const res = await fetch('/api/dashboard')
@@ -99,10 +142,29 @@ export default function Dashboard() {
     setTimeout(() => setPulse(false), 600)
   }
 
+  // Keep a stable reference so the realtime subscription always calls the latest fetchData
+  const fetchDataRef = useRef(fetchData)
+  fetchDataRef.current = fetchData
+
   useEffect(() => {
     fetchData()
-    const interval = setInterval(fetchData, 8000)
-    return () => clearInterval(interval)
+
+    // Fallback polling — keeps the dashboard fresh if realtime drops or never connects
+    const interval = setInterval(() => fetchDataRef.current(), 8000)
+
+    // Supabase Realtime — refresh instantly on any change to conversations/messages
+    const channel = supabase
+      .channel('dashboard-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => fetchDataRef.current())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => fetchDataRef.current())
+      .subscribe((status) => {
+        setRealtime(status === 'SUBSCRIBED')
+      })
+
+    return () => {
+      clearInterval(interval)
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   if (loading) return (
@@ -160,9 +222,23 @@ export default function Dashboard() {
             </div>
           )}
           <div className={cn('flex items-center gap-1.5 transition-opacity', pulse ? 'opacity-100' : 'opacity-60')}>
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-            <span className="text-[10px] text-[#444] tracking-widest">LIVE</span>
+            {realtime ? (
+              <>
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                <span className="text-[10px] text-emerald-400 tracking-widest">LIVE</span>
+              </>
+            ) : (
+              <>
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
+                <span className="text-[10px] text-amber-400/70 tracking-widest">POLLING</span>
+              </>
+            )}
           </div>
+          <button onClick={() => setTourOpen(true)}
+            className="flex items-center gap-1.5 text-[10px] tracking-widest text-[#444] hover:text-[#888] uppercase bg-[#0d0d0d] border border-[#1a1a1a] hover:border-[#222] px-3 py-1 rounded transition-all">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/><path d="M12 16v-4M12 8h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+            Take Tour
+          </button>
           <a href="/chat" className="text-[10px] tracking-widest text-emerald-500 hover:text-emerald-400 uppercase border border-emerald-500/30 px-3 py-1 rounded hover:bg-emerald-500/5 transition-all">
             Open Demo →
           </a>
@@ -170,7 +246,7 @@ export default function Dashboard() {
       </div>
 
       {/* Ticker */}
-      <div className="h-8 bg-[#0a0a0a] border-b border-[#141414] flex items-center px-6 gap-3">
+      <div data-tour="ticker" className="h-8 bg-[#0a0a0a] border-b border-[#141414] flex items-center px-6 gap-3">
         <span className="text-[9px] text-emerald-500 tracking-widest uppercase flex-shrink-0">LIVE FEED</span>
         <div className="w-px h-3 bg-[#222]"></div>
         <Ticker items={tickerItems} />
@@ -180,7 +256,7 @@ export default function Dashboard() {
         <div className="flex flex-1 overflow-hidden">
 
           {/* Left: Conversation feed */}
-          <div className="flex-1 border-r border-[#141414] flex flex-col overflow-hidden">
+          <div data-tour="conversations" className="flex-1 border-r border-[#141414] flex flex-col overflow-hidden">
             <div className="px-5 py-3 border-b border-[#141414] flex items-center justify-between">
               <span className="text-[10px] text-[#444] tracking-widest uppercase">Active conversations</span>
               <span className="text-[10px] text-[#333]">{recentConversations?.length} total</span>
@@ -253,7 +329,7 @@ export default function Dashboard() {
           <div className="w-80 flex flex-col bg-[#0a0a0a]">
 
             {/* Critical sentiment ring */}
-            <div className="p-5 border-b border-[#141414]">
+            <div data-tour="sentiment-ring" className="p-5 border-b border-[#141414]">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-[9px] text-[#444] tracking-widest uppercase">Most at-risk customer</span>
                 {criticalScore < 30 && <span className="text-[9px] text-red-400 border border-red-500/20 px-1.5 py-0.5 rounded animate-pulse">CRITICAL</span>}
@@ -279,7 +355,7 @@ export default function Dashboard() {
                 { label: 'Escalations', value: stats.escalatedConversations, color: stats.escalatedConversations > 0 ? '#ef4444' : '#e5e5e5' },
                 { label: 'Cost saved', value: `₹${(stats.estimatedCostSaved/1000).toFixed(1)}k`, color: '#10b981' },
               ].map((m, i) => (
-                <div key={i} className={cn('p-4', i % 2 === 0 ? 'border-r border-[#141414]' : '', i < 2 ? 'border-b border-[#141414]' : '')}>
+                <div key={i} className={cn('p-4', i % 2 === 0 ? 'border-r border-[#141414]' : '', i < 2 ? 'border-b border-[#141414]' : '', pulse ? 'animate-flash' : '')}>
                   <p className="text-[9px] text-[#333] uppercase tracking-widest mb-1">{m.label}</p>
                   <p className="text-xl font-semibold font-mono" style={{color: m.color}}>{m.value}</p>
                 </div>
@@ -310,7 +386,7 @@ export default function Dashboard() {
             </div>
 
             {/* Voice */}
-            <div className="p-4 flex-1">
+            <div data-tour="voice" className="p-4 flex-1">
               <p className="text-[9px] text-[#444] tracking-widest uppercase mb-3">Voice callback</p>
               <VoiceDemo
                 customer={hotConv?.customer}
@@ -333,7 +409,7 @@ export default function Dashboard() {
               { label: 'Avg sentiment', value: `${stats.avgSentiment}/100`, color: stats.avgSentiment > 60 ? '#10b981' : '#f59e0b' },
               { label: 'VIP customers', value: `${stats.vipCustomers} of ${stats.totalCustomers}`, color: '#f59e0b' },
             ].map((s, i) => (
-              <div key={i} className="bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-4">
+              <div key={i} className={cn('bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-4', pulse ? 'animate-flash' : '')}>
                 <p className="text-[9px] text-[#444] uppercase tracking-widest mb-2">{s.label}</p>
                 <p className="text-2xl font-semibold font-mono" style={{color: (s as any).color || '#e5e5e5'}}>{s.value}</p>
               </div>
@@ -357,7 +433,7 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </div>
 
-          <div className="bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-5 mt-4">
+          <div data-tour="ai-insights" className="bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-5 mt-4">
             <div className="flex items-center justify-between mb-4">
               <p className="text-[9px] text-[#444] uppercase tracking-widest">AI insights</p>
               <div className="flex items-center gap-1.5">
@@ -411,7 +487,7 @@ export default function Dashboard() {
     </div>
 
     {/* Health score cards */}
-    <div className="grid grid-cols-3 gap-3 mb-5">
+    <div data-tour="health-scores" className="grid grid-cols-3 gap-3 mb-5">
       {(data.customerHealthScores || []).slice(0, 6).map((c: any) => {
         const col = c.score > 70 ? '#10b981' : c.score > 45 ? '#f59e0b' : '#ef4444'
         const label = c.score > 70 ? 'Healthy' : c.score > 45 ? 'At risk' : 'Critical'
@@ -550,6 +626,16 @@ export default function Dashboard() {
           <span className="text-[9px] text-[#333] font-mono">VAPI VOICE</span>
         </div>
       </div>
+
+      {/* Guided tour overlay */}
+      {tourOpen && (
+        <DemoTour
+          steps={TOUR_STEPS}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          onClose={() => setTourOpen(false)}
+        />
+      )}
 
     </div>
   )

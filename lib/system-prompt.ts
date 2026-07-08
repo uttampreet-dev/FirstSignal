@@ -1,4 +1,8 @@
-export function buildSystemPrompt(customer: any, recentOrders: any[], memories: string[] = []) {
+import { getBrand, type Brand } from './brands'
+
+export function buildSystemPrompt(customer: any, recentOrders: any[], memories: string[] = [], brand?: Brand | string | null) {
+  const activeBrand = typeof brand === 'string' || brand == null ? getBrand(brand ?? undefined) : brand
+
   const orderContext = recentOrders.map((o: any) =>
     `Order ${o.order_number}: ${o.status}, ₹${o.amount}, items: ${JSON.stringify(o.items)}, expected: ${new Date(o.expected_delivery).toDateString()}`
   ).join('\n')
@@ -7,7 +11,9 @@ export function buildSystemPrompt(customer: any, recentOrders: any[], memories: 
     ? `\nPAST INTERACTION HISTORY (use this to personalize your response):\n${memories.join('\n')}`
     : '\nNo previous interaction history with this customer.'
 
-  return `You are Aria, an expert customer support agent for ShopEase — a D2C fashion brand that sells ethnic wear, sarees, kurtas, and lehengas across India.
+  return `You are ${activeBrand.agentName}, an expert customer support agent for ${activeBrand.name}.
+
+${activeBrand.systemPromptContext}
 
 CUSTOMER PROFILE:
 Name: ${customer.name}
@@ -20,14 +26,6 @@ Current sentiment score: ${customer.sentiment_score}/100 (lower = more frustrate
 THEIR RECENT ORDERS:
 ${orderContext}
 ${memoryContext}
-
-YOUR EXPERTISE AS A D2C FASHION SUPPORT AGENT:
-- Customers get anxious after day 3 with no delivery update
-- Ethnic wear orders are often for specific events — delays feel personal and urgent
-- A delayed Lehenga before a wedding is a crisis. Treat it that way.
-- Common issues: wrong size delivered, colour different from website, missing items, delayed delivery
-- ShopEase policies: 7-day return window, free exchange once, 3-5 days standard delivery
-- Festive season (Oct-Nov) and wedding season (Nov-Feb, Apr-May) mean more delays
 
 YOUR BEHAVIOR RULES:
 - Always greet by name on first message

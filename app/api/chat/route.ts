@@ -4,11 +4,12 @@ import { analyzeSentiment } from '@/lib/sentiment'
 import { getMemories, extractAndSaveMemory } from '@/lib/memory'
 import { detectAction } from '@/lib/action-detector'
 import { processRefund, applyDiscount, markRedelivery, escalateToHuman } from '@/lib/resolution'
+import { detectLanguage, HINDI_SYSTEM_INSTRUCTION } from '@/lib/language-detector'
 import { NextResponse } from 'next/server'
 
 export async function POST(req: Request) {
   try {
-    const { message, customerId, conversationId } = await req.json()
+    const { message, customerId, conversationId, brandId } = await req.json()
 
     const { data: customer } = await supabaseAdmin.from('customers').select('*').eq('id', customerId).single()
     if (!customer) return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
@@ -31,8 +32,15 @@ export async function POST(req: Request) {
     const Groq = (await import('groq-sdk')).default
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! })
 
+    // Detect Hindi/Hinglish so the agent replies in the customer's language
+    const languageDetection = detectLanguage(message)
+    let systemPrompt = buildSystemPrompt(customer, orders || [], memories, brandId)
+    if (languageDetection.isHindi) {
+      systemPrompt += `\n\nLANGUAGE INSTRUCTION:\n${HINDI_SYSTEM_INSTRUCTION}`
+    }
+
     const allMessages = [
-      { role: 'system' as const, content: buildSystemPrompt(customer, orders || [], memories) },
+      { role: 'system' as const, content: systemPrompt },
       ...(history || []).map((msg: any) => ({
         role: msg.role === 'assistant' ? 'assistant' as const : 'user' as const,
         content: msg.content
@@ -101,7 +109,8 @@ export async function POST(req: Request) {
       sentiment: sentimentResult,
       isEscalated: shouldEscalate,
       memoriesUsed: memories.length,
-      action: resolutionResult
+      action: resolutionResult,
+      detectedLanguage: languageDetection.language
     })
 
   } catch (error) {
