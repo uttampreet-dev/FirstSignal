@@ -459,6 +459,96 @@ function AnalyticsTab({ stats, actions, sentimentTrend, sentimentBreakdown, cust
   )
 }
 
+function ProactiveDemo({ onComplete }: { onComplete: () => void }) {
+  const [status, setStatus] = useState<'idle' | 'loading' | 'running' | 'done'>('idle')
+  const [visibleSteps, setVisibleSteps] = useState(0)
+  const [orderNumber, setOrderNumber] = useState('')
+  const [error, setError] = useState('')
+  const timers = useRef<any[]>([])
+
+  const clearTimers = () => { timers.current.forEach(clearTimeout); timers.current = [] }
+  useEffect(() => () => clearTimers(), [])
+
+  const steps = [
+    { icon: '🔍', text: `Delayed order detected — ${orderNumber || 'ORD-DEMO'} (Bridal Lehenga)`, color: '#888' },
+    { icon: '⚡', text: 'Proactive Agent triggered — customer not yet aware', color: '#888' },
+    { icon: '💬', text: 'Aria initiating outreach before complaint...', color: '#aaa' },
+    { icon: '✓', text: 'Message delivered — complaint prevented', color: '#10b981' },
+  ]
+
+  const run = async () => {
+    clearTimers()
+    setError(''); setVisibleSteps(0); setStatus('loading')
+    try {
+      const res = await fetch('/api/demo/simulate', { method: 'POST' })
+      const data = await res.json()
+      if (!data.success) throw new Error(data.detail || 'Simulation failed')
+      setOrderNumber(data.order?.order_number || 'ORD-DEMO')
+      setStatus('running')
+      // Reveal the 4 steps, one every 800ms
+      for (let i = 1; i <= steps.length; i++) {
+        timers.current.push(setTimeout(() => setVisibleSteps(i), i * 800))
+      }
+      // After the final step, refresh the dashboard so the new proactive conversation appears
+      timers.current.push(setTimeout(() => {
+        setStatus('done')
+        onComplete()
+      }, steps.length * 800 + 2000))
+    } catch (e: any) {
+      setError(e?.message || 'Something went wrong')
+      setStatus('idle')
+    }
+  }
+
+  const reset = () => {
+    clearTimers()
+    setStatus('idle'); setVisibleSteps(0); setOrderNumber(''); setError('')
+  }
+
+  return (
+    <div className="bg-[#0a0f0c] border border-emerald-500/20 rounded-xl p-4" style={{ fontFamily: 'monospace' }}>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-emerald-500">Proactive Intelligence Demo</p>
+          <p className="text-[11px] text-[#555] mt-0.5">Watch FirstSignal prevent a complaint before it happens</p>
+        </div>
+        {status === 'idle' && (
+          <button onClick={run}
+            className="bg-emerald-500 text-black px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-400 transition-colors flex-shrink-0">
+            Simulate Delayed Order →
+          </button>
+        )}
+        {(status === 'running' || status === 'done') && (
+          <button onClick={reset}
+            className="text-[10px] text-[#666] hover:text-[#999] border border-[#1a1a1a] hover:border-[#222] px-3 py-1.5 rounded uppercase tracking-widest transition-all flex-shrink-0">
+            Reset Demo
+          </button>
+        )}
+      </div>
+
+      {status === 'loading' && (
+        <div className="mt-4 flex items-center gap-2.5">
+          <div className="w-3.5 h-3.5 border border-emerald-500/40 border-t-emerald-500 rounded-full animate-spin"></div>
+          <span className="text-[11px] text-[#888]">Detecting at-risk customer...</span>
+        </div>
+      )}
+
+      {(status === 'running' || status === 'done') && (
+        <div className="mt-4 space-y-2">
+          {steps.slice(0, visibleSteps).map((s, i) => (
+            <div key={i} className="flex items-center gap-2.5 animate-stepin">
+              <span className="text-sm flex-shrink-0 w-4 text-center">{s.icon}</span>
+              <span className="text-[11px]" style={{ color: s.color }}>{s.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {error && <p className="mt-3 text-[11px] text-red-400">⚠ {error}</p>}
+    </div>
+  )
+}
+
 function VoiceTab({ hotConv }: any) {
   const [transcriptOpen, setTranscriptOpen] = useState(false)
   const custName = hotConv?.customer?.name || 'Priya Sharma'
@@ -718,7 +808,14 @@ export default function Dashboard() {
       </div>
 
       {activeTab === 'live' && (
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-col flex-1 overflow-hidden">
+
+          {/* Proactive Intelligence demo panel */}
+          <div className="px-4 pt-4 pb-1 flex-shrink-0">
+            <ProactiveDemo onComplete={fetchData} />
+          </div>
+
+          <div className="flex flex-1 overflow-hidden">
 
           {/* Left: Conversation feed */}
           <div data-tour="conversations" className="flex-1 border-r border-[#141414] flex flex-col overflow-hidden">
@@ -858,6 +955,7 @@ export default function Dashboard() {
                 conversationSummary={hotConv?.lastMessage?.content || 'Customer support escalation'}
               />
             </div>
+          </div>
           </div>
         </div>
       )}

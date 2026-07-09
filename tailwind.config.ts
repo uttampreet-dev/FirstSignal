@@ -15,12 +15,17 @@ export default {
         tourbar: {
           '0%': { width: '0%' },
           '100%': { width: '100%' }
+        },
+        stepin: {
+          '0%': { opacity: '0', transform: 'translateY(4px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' }
         }
       },
       animation: {
         scroll: 'scroll 25s linear infinite',
         flash: 'flash 0.6s ease-out',
-        tourbar: 'tourbar 8s linear'
+        tourbar: 'tourbar 8s linear',
+        stepin: 'stepin 0.4s ease-out'
       }
     },
   },

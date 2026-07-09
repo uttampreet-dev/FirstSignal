@@ -1,5 +1,60 @@
 import { supabaseAdmin } from '@/lib/supabase'
 
+// Sends a single proactive outreach for a delayed order (deduped per order).
+// Returns the outreach result (incl. the created conversation) or null if already sent.
+export async function sendDelayedOrderOutreach(order: any, customer: any) {
+  // Check if we already sent outreach for this order
+  const { data: existing } = await supabaseAdmin
+    .from('memory_embeddings')
+    .select('id')
+    .eq('customer_id', customer.id)
+    .contains('metadata', { action: 'proactive_outreach', orderId: order.order_number })
+    .limit(1)
+
+  if (existing && existing.length > 0) return null
+
+  // Create a proactive conversation
+  const { data: conv } = await supabaseAdmin
+    .from('conversations')
+    .insert({
+      customer_id: customer.id,
+      status: 'proactive',
+      sentiment: 'neutral',
+      sentiment_score: 50
+    })
+    .select()
+    .single()
+
+  const proactiveMessage = `Hi ${customer.name}! I noticed your order ${order.order_number} (${JSON.stringify(order.items)}) was expected on ${new Date(order.expected_delivery).toLocaleDateString('en-IN')} but hasn't arrived yet. I'm so sorry about this delay${customer.is_vip ? ' — as one of our VIP customers, this is unacceptable and I want to make it right immediately' : ''}. Would you like me to arrange express redelivery or process a refund?`
+
+  await supabaseAdmin.from('messages').insert({
+    conversation_id: conv?.id,
+    role: 'assistant',
+    content: proactiveMessage
+  })
+
+  // Save outreach record to memory
+  await supabaseAdmin.from('memory_embeddings').insert({
+    customer_id: customer.id,
+    content: `Proactive outreach sent for delayed order ${order.order_number}`,
+    metadata: {
+      action: 'proactive_outreach',
+      orderId: order.order_number,
+      type: 'delayed_order',
+      timestamp: new Date().toISOString()
+    }
+  })
+
+  return {
+    type: 'delayed_order',
+    customerId: customer.id,
+    customerName: customer.name,
+    orderId: order.order_number,
+    conversation: conv,
+    message: proactiveMessage
+  }
+}
+
 export async function checkAndTriggerOutreach() {
   const results: any[] = []
 
@@ -11,57 +66,16 @@ export async function checkAndTriggerOutreach() {
     .lt('expected_delivery', new Date().toISOString())
 
   for (const order of delayedOrders || []) {
-    const customer = order.customers
-
-    // Check if we already sent outreach for this order
-    const { data: existing } = await supabaseAdmin
-      .from('memory_embeddings')
-      .select('id')
-      .eq('customer_id', customer.id)
-      .contains('metadata', { action: 'proactive_outreach', orderId: order.order_number })
-      .limit(1)
-
-    if (existing && existing.length > 0) continue
-
-    // Create a proactive conversation
-    const { data: conv } = await supabaseAdmin
-      .from('conversations')
-      .insert({
-        customer_id: customer.id,
-        status: 'proactive',
-        sentiment: 'neutral',
-        sentiment_score: 50
+    const result = await sendDelayedOrderOutreach(order, order.customers)
+    if (result) {
+      results.push({
+        type: result.type,
+        customerId: result.customerId,
+        customerName: result.customerName,
+        orderId: result.orderId,
+        message: result.message
       })
-      .select()
-      .single()
-
-    const proactiveMessage = `Hi ${customer.name}! I noticed your order ${order.order_number} (${JSON.stringify(order.items)}) was expected on ${new Date(order.expected_delivery).toLocaleDateString('en-IN')} but hasn't arrived yet. I'm so sorry about this delay${customer.is_vip ? ' — as one of our VIP customers, this is unacceptable and I want to make it right immediately' : ''}. Would you like me to arrange express redelivery or process a refund?`
-
-    await supabaseAdmin.from('messages').insert({
-      conversation_id: conv?.id,
-      role: 'assistant',
-      content: proactiveMessage
-    })
-
-    // Save outreach record to memory
-    await supabaseAdmin.from('memory_embeddings').insert({
-      customer_id: customer.id,
-      content: `Proactive outreach sent for delayed order ${order.order_number}`,
-      metadata: {
-        action: 'proactive_outreach',
-        orderId: order.order_number,
-        type: 'delayed_order',
-        timestamp: new Date().toISOString()
-      }
-    })
-
-    results.push({
-      type: 'delayed_order',
-      customerId: customer.id,
-      customerName: customer.name,
-      orderId: order.order_number,
-      message: proactiveMessage
-    })
+    }
   }
 
   // Trigger 2: Orders not received 5+ days after expected delivery
