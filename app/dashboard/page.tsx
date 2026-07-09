@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, LabelList, ScatterChart, Scatter, ZAxis, CartesianGrid } from 'recharts'
 import VoiceDemo from '@/components/VoiceDemo'
 import { supabase } from '@/lib/supabase'
 import DemoTour, { type TourStep } from '@/components/DemoTour'
@@ -25,10 +25,22 @@ const TOUR_STEPS: TourStep[] = [
     description: 'Every active conversation with live sentiment. Click any row to expand the full transcript inline and see exactly how the AI handled it.',
   },
   {
-    tab: 'live',
-    selector: 'voice',
-    title: 'Voice Callback',
-    description: 'For critical escalations, Aria places an AI voice call to the customer directly from the browser — no phone system required.',
+    tab: 'analytics',
+    selector: 'analytics-kpis',
+    title: 'Business KPIs',
+    description: 'Headline metrics at a glance — conversation volume, autonomous resolution rate, cost saved, and average sentiment, each with its own live micro-visual.',
+  },
+  {
+    tab: 'analytics',
+    selector: 'resolution-funnel',
+    title: 'Resolution Funnel',
+    description: 'How conversations flow from first contact through escalation, autonomous resolution, and human handoff — with conversion at every stage.',
+  },
+  {
+    tab: 'analytics',
+    selector: 'customer-scatter',
+    title: 'Customer Value vs Health',
+    description: 'Every customer plotted by lifetime value against health score, sized by order count — instantly surfacing high-value accounts at risk of churn.',
   },
   {
     tab: 'analytics',
@@ -41,6 +53,12 @@ const TOUR_STEPS: TourStep[] = [
     selector: 'health-scores',
     title: 'Customer Health Scores',
     description: 'A health score for every customer, blending order history, spend, and sentiment so you can prioritise who needs attention before they churn.',
+  },
+  {
+    tab: 'voice',
+    selector: 'voice-summary',
+    title: 'Voice Escalations',
+    description: 'When sentiment turns critical, Aria places an AI voice call from the browser. Each call is summarised here — sentiment lift, resolution, and full transcript.',
   },
 ]
 function ConversationDetail({ conversationId, onClose }: { conversationId: string, onClose: () => void }) {
@@ -119,6 +137,453 @@ function Ticker({ items }: { items: string[] }) {
             {item}
           </span>
         ))}
+      </div>
+    </div>
+  )
+}
+
+// Small circular progress indicator used in the metric cards
+function MiniRing({ value, color, size = 52, stroke = 5 }: { value: number, color: string, size?: number, stroke?: number }) {
+  const r = (size - stroke) / 2
+  const circ = 2 * Math.PI * r
+  const v = Math.min(Math.max(value, 0), 100)
+  const dash = (v / 100) * circ
+  const c = size / 2
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="flex-shrink-0">
+      <circle cx={c} cy={c} r={r} fill="none" stroke="#1a1a1a" strokeWidth={stroke} />
+      <circle cx={c} cy={c} r={r} fill="none" stroke={color} strokeWidth={stroke}
+        strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
+        transform={`rotate(-90 ${c} ${c})`} style={{ transition: 'all 0.8s ease' }} />
+      <text x={c} y={c + 3.5} textAnchor="middle" fill={color} fontSize="11" fontWeight="600" fontFamily="monospace">{value}%</text>
+    </svg>
+  )
+}
+
+// Tooltip for the customer value vs health scatter
+function ScatterTip({ active, payload }: any) {
+  if (!active || !payload?.length) return null
+  const d = payload[0].payload
+  const col = d.score > 70 ? '#10b981' : d.score >= 40 ? '#f59e0b' : '#ef4444'
+  return (
+    <div className="bg-[#111] border border-[#222] rounded-md px-3 py-2" style={{ fontFamily: 'monospace' }}>
+      <p className="text-[11px] text-[#ddd] mb-1 flex items-center gap-1.5">
+        <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: col }}></span>
+        {d.name}{d.is_vip ? ' · VIP' : ''}
+      </p>
+      <p className="text-[10px] text-[#666]">Lifetime value ₹{d.total_spent?.toLocaleString()}</p>
+      <p className="text-[10px] text-[#666]">Health <span style={{ color: col }}>{d.score}</span>/100 · {d.total_orders} orders</p>
+    </div>
+  )
+}
+
+function AnalyticsTab({ stats, actions, sentimentTrend, sentimentBreakdown, customerHealthScores, pulse }: any) {
+  const sb = sentimentBreakdown || { positive: 0, neutral: 0, negative: 0, frustrated: 0 }
+  const sentTotal = (sb.positive + sb.neutral + sb.negative + sb.frustrated) || 1
+
+  const donut = [
+    { name: 'Positive', value: sb.positive || 0, color: '#10b981' },
+    { name: 'Neutral', value: sb.neutral || 0, color: '#888888' },
+    { name: 'Negative', value: sb.negative || 0, color: '#f59e0b' },
+    { name: 'Frustrated', value: sb.frustrated || 0, color: '#ef4444' },
+  ]
+
+  const actionBars = [
+    { name: 'Refunds', value: actions.refundActions || 0, color: '#ef4444' },
+    { name: 'Discounts', value: actions.discountActions || 0, color: '#f59e0b' },
+    { name: 'Redeliveries', value: actions.redeliveryActions || 0, color: '#3b82f6' },
+    { name: 'Proactive', value: actions.proactiveActions || 0, color: '#10b981' },
+  ]
+
+  const trend = sentimentTrend || []
+  // Cumulative conversation volume, derived from the trend timeline (monotonic — non-misleading)
+  const convSpark = trend.map((_: any, i: number) => ({
+    i,
+    v: Math.round(stats.totalConversations * (i + 1) / Math.max(trend.length, 1)),
+  }))
+
+  const scatter = (customerHealthScores || []).map((c: any) => ({
+    ...c,
+    total_spent: c.total_spent || 0,
+    score: c.score || 0,
+    total_orders: c.total_orders || 1,
+  }))
+
+  const avgCol = stats.avgSentiment > 60 ? '#10b981' : stats.avgSentiment > 40 ? '#f59e0b' : '#ef4444'
+  const avgLabel = stats.avgSentiment > 60 ? 'Positive' : stats.avgSentiment > 40 ? 'Neutral' : stats.avgSentiment > 20 ? 'At risk' : 'Critical'
+
+  const funnel = [
+    { label: 'Total Conversations', value: stats.totalConversations || 0, color: '#10b981' },
+    { label: 'Escalated', value: stats.escalatedConversations || 0, color: '#f59e0b' },
+    { label: 'Resolved', value: stats.resolvedConversations || 0, color: '#3b82f6' },
+    { label: 'Human Handoff', value: stats.escalatedConversations || 0, color: '#ef4444' },
+  ]
+  const funnelMax = Math.max(...funnel.map(f => f.value), 1)
+  const funnelBase = funnel[0].value || 1
+
+  return (
+    <div className="flex-1 p-6 overflow-y-auto">
+      <div className="mb-5">
+        <h2 className="text-sm font-medium text-[#e5e5e5] tracking-wide">Analytics</h2>
+        <p className="text-[11px] text-[#444] mt-0.5">Business intelligence · sentiment, actions, and customer value</p>
+      </div>
+
+      {/* ROW 1 — Metric cards */}
+      <div data-tour="analytics-kpis" className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+        {/* Total conversations + sparkline */}
+        <div className={cn('bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-4 flex flex-col', pulse ? 'animate-flash' : '')}>
+          <p className="text-[9px] text-[#444] uppercase tracking-widest mb-1.5">Total conversations</p>
+          <p className="text-3xl font-semibold font-mono text-[#e5e5e5] leading-none">{stats.totalConversations}</p>
+          <div className="h-9 -mx-1 mt-auto pt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={convSpark} margin={{ top: 2, bottom: 0, left: 0, right: 0 }}>
+                <defs>
+                  <linearGradient id="spark" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.25} />
+                    <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <Area type="monotone" dataKey="v" stroke="#10b981" strokeWidth={1.5} fill="url(#spark)" dot={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Resolution rate + mini ring */}
+        <div className={cn('bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-4 flex items-center justify-between gap-3', pulse ? 'animate-flash' : '')}>
+          <div>
+            <p className="text-[9px] text-[#444] uppercase tracking-widest mb-1.5">Resolution rate</p>
+            <p className="text-3xl font-semibold font-mono text-emerald-400 leading-none">{stats.resolutionRate}%</p>
+            <p className="text-[9px] text-[#444] mt-2">autonomous</p>
+          </div>
+          <MiniRing value={stats.resolutionRate} color="#10b981" size={58} stroke={5} />
+        </div>
+
+        {/* Cost saved + up trend */}
+        <div className={cn('bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-4 flex flex-col', pulse ? 'animate-flash' : '')}>
+          <p className="text-[9px] text-[#444] uppercase tracking-widest mb-1.5">Cost saved</p>
+          <p className="text-3xl font-semibold font-mono text-emerald-400 leading-none">₹{((stats.estimatedCostSaved || 0) / 1000).toFixed(1)}k</p>
+          <div className="flex items-center gap-1.5 mt-auto pt-3">
+            <span className="text-emerald-500 text-sm leading-none">↑</span>
+            <span className="text-[9px] text-emerald-500/70 tracking-wide">retention value today</span>
+          </div>
+        </div>
+
+        {/* Avg sentiment color-coded */}
+        <div className={cn('bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-4 flex flex-col', pulse ? 'animate-flash' : '')}>
+          <p className="text-[9px] text-[#444] uppercase tracking-widest mb-1.5">Avg sentiment</p>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: avgCol }}></span>
+            <p className="text-3xl font-semibold font-mono leading-none" style={{ color: avgCol }}>
+              {stats.avgSentiment}<span className="text-sm text-[#333]">/100</span>
+            </p>
+          </div>
+          <p className="text-[9px] mt-auto pt-3 tracking-wide" style={{ color: avgCol }}>{avgLabel}</p>
+        </div>
+      </div>
+
+      {/* ROW 2 — Three charts (40 / 30 / 30) */}
+      <div className="grid grid-cols-1 lg:grid-cols-10 gap-3 mb-3">
+        {/* Sentiment trend */}
+        <div className="lg:col-span-4 bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-5">
+          <p className="text-[9px] text-[#444] uppercase tracking-widest mb-4">Sentiment trend</p>
+          <ResponsiveContainer width="100%" height={260}>
+            <AreaChart data={trend}>
+              <defs>
+                <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.15} />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="#141414" vertical={false} />
+              <XAxis dataKey="index" tick={{ fontSize: 10, fill: '#333' }} axisLine={false} tickLine={false} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#333' }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ background: '#111', border: '1px solid #222', borderRadius: 6, fontSize: 11 }} itemStyle={{ color: '#10b981' }} labelStyle={{ color: '#555' }} formatter={(v: any) => [`${v}/100`, 'Score']} />
+              <Area type="monotone" dataKey="score" stroke="#10b981" strokeWidth={2} fill="url(#sg)" dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Sentiment breakdown donut */}
+        <div className="lg:col-span-3 bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-5">
+          <p className="text-[9px] text-[#444] uppercase tracking-widest mb-2">Sentiment breakdown</p>
+          <div className="relative">
+            <ResponsiveContainer width="100%" height={150}>
+              <PieChart>
+                <Pie data={donut} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={44} outerRadius={66} paddingAngle={2} stroke="none">
+                  {donut.map((d, i) => (<Cell key={i} fill={d.color} />))}
+                </Pie>
+                <Tooltip contentStyle={{ background: '#111', border: '1px solid #222', borderRadius: 6, fontSize: 11 }} itemStyle={{ color: '#ccc' }} formatter={(v: any, n: any) => [`${v} (${Math.round((v / sentTotal) * 100)}%)`, n]} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none" style={{ height: 150 }}>
+              <span className="text-lg font-semibold font-mono text-[#e5e5e5] leading-none">{sentTotal}</span>
+              <span className="text-[8px] text-[#444] uppercase tracking-widest mt-0.5">total</span>
+            </div>
+          </div>
+          {/* Legend with counts + percentages (secondary encoding) */}
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-3">
+            {donut.map((d, i) => (
+              <div key={i} className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: d.color }}></span>
+                <span className="text-[10px] text-[#888] flex-1 truncate">{d.name}</span>
+                <span className="text-[10px] font-mono text-[#666]">{d.value}</span>
+                <span className="text-[9px] font-mono text-[#444] w-8 text-right">{Math.round((d.value / sentTotal) * 100)}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Autonomous actions bar */}
+        <div className="lg:col-span-3 bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-5">
+          <p className="text-[9px] text-[#444] uppercase tracking-widest mb-4">Autonomous actions</p>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={actionBars} layout="vertical" margin={{ top: 0, right: 28, bottom: 0, left: 0 }}>
+              <CartesianGrid horizontal={false} stroke="#141414" />
+              <XAxis type="number" tick={{ fontSize: 9, fill: '#333' }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} width={78} />
+              <Tooltip cursor={{ fill: 'rgba(255,255,255,0.03)' }} contentStyle={{ background: '#111', border: '1px solid #222', borderRadius: 6, fontSize: 11 }} itemStyle={{ color: '#ccc' }} formatter={(v: any) => [v, 'Actions']} />
+              <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={16}>
+                {actionBars.map((a, i) => (<Cell key={i} fill={a.color} />))}
+                <LabelList dataKey="value" position="right" fill="#888" fontSize={10} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* ROW 3 — Resolution funnel */}
+      <div data-tour="resolution-funnel" className="bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-5 mb-3">
+        <p className="text-[9px] text-[#444] uppercase tracking-widest mb-4">Resolution funnel</p>
+        <div className="space-y-1">
+          {funnel.map((f, i) => (
+            <div key={i}>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] text-[#666] w-32 flex-shrink-0 text-right">{f.label}</span>
+                <div className="flex-1 h-8 bg-[#0a0a0a] rounded overflow-hidden">
+                  <div className="h-full rounded flex items-center px-3 transition-all duration-700"
+                    style={{ width: `${Math.max((f.value / funnelMax) * 100, 5)}%`, background: `${f.color}1f`, borderLeft: `2px solid ${f.color}` }}>
+                    <span className="text-[12px] font-mono font-medium" style={{ color: f.color }}>{f.value}</span>
+                  </div>
+                </div>
+                <span className="text-[10px] font-mono text-[#555] w-12 text-right flex-shrink-0">{Math.round((f.value / funnelBase) * 100)}%</span>
+              </div>
+              {i < funnel.length - 1 && (
+                <div className="flex items-center gap-3">
+                  <span className="w-32 flex-shrink-0"></span>
+                  <span className="text-[9px] text-[#333] font-mono pl-3 py-0.5">↓ {Math.round((funnel[i + 1].value / (f.value || 1)) * 100)}% continue</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ROW 4 — Customer value vs health scatter */}
+      <div data-tour="customer-scatter" className="bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-5 mb-3">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-[9px] text-[#444] uppercase tracking-widest">Customer value vs health score</p>
+          <div className="flex items-center gap-3">
+            {[{ c: '#10b981', l: 'Healthy >70' }, { c: '#f59e0b', l: 'At risk 40–70' }, { c: '#ef4444', l: 'Critical <40' }].map((k, i) => (
+              <div key={i} className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full" style={{ background: k.c }}></span>
+                <span className="text-[9px] text-[#555]">{k.l}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <ResponsiveContainer width="100%" height={280}>
+          <ScatterChart margin={{ top: 10, right: 24, bottom: 24, left: 4 }}>
+            <CartesianGrid stroke="#141414" />
+            <XAxis type="number" dataKey="total_spent" name="Lifetime value" tick={{ fontSize: 9, fill: '#333' }} axisLine={false} tickLine={false}
+              tickFormatter={(v: any) => `₹${(v / 1000).toFixed(0)}k`}
+              label={{ value: 'Lifetime value →', position: 'insideBottom', offset: -12, fill: '#333', fontSize: 9 }} />
+            <YAxis type="number" dataKey="score" name="Health" domain={[0, 100]} tick={{ fontSize: 9, fill: '#333' }} axisLine={false} tickLine={false}
+              label={{ value: 'Health →', angle: -90, position: 'insideLeft', fill: '#333', fontSize: 9 }} />
+            <ZAxis type="number" dataKey="total_orders" range={[50, 420]} name="Orders" />
+            <Tooltip content={<ScatterTip />} cursor={{ strokeDasharray: '3 3', stroke: '#333' }} />
+            <Scatter data={scatter}>
+              {scatter.map((c: any, i: number) => {
+                const col = c.score > 70 ? '#10b981' : c.score >= 40 ? '#f59e0b' : '#ef4444'
+                return <Cell key={i} fill={col} fillOpacity={0.7} stroke={col} strokeWidth={1} />
+              })}
+            </Scatter>
+          </ScatterChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* ROW 5 — AI insights */}
+      <div data-tour="ai-insights" className="bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-5">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-[9px] text-[#444] uppercase tracking-widest">AI insights</p>
+          <div className="flex items-center gap-1.5">
+            <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
+            <span className="text-[9px] text-[#333]">Generated from live data</span>
+          </div>
+        </div>
+        <div className="space-y-0">
+          {[
+            {
+              icon: '↑',
+              color: 'text-red-400',
+              bg: 'bg-red-500/5 border-red-500/10',
+              text: `${stats.escalatedConversations} conversations escalated this session — all involved delayed orders. Delivery reliability is your #1 churn driver right now.`,
+            },
+            {
+              icon: '◎',
+              color: 'text-amber-400',
+              bg: 'bg-amber-500/5 border-amber-500/10',
+              text: `VIP customers are ${stats.vipCustomers} of ${stats.totalCustomers} tracked but represent the majority of escalations. A dedicated VIP SLA would significantly reduce churn risk.`,
+            },
+            {
+              icon: '⚡',
+              color: 'text-emerald-400',
+              bg: 'bg-emerald-500/5 border-emerald-500/10',
+              text: `Proactive outreach intercepted ${stats.proactiveConversations} potential complaints before they escalated. Estimated ₹${(stats.proactiveConversations * 800).toLocaleString()} in retention value generated autonomously.`,
+            },
+            {
+              icon: '◈',
+              color: 'text-blue-400',
+              bg: 'bg-blue-500/5 border-blue-500/10',
+              text: `Resolution rate is ${stats.resolutionRate}% — ${stats.resolutionRate > 70 ? 'strong performance. Most issues resolved without human intervention.' : 'below target. Consider expanding autonomous resolution rules for common complaint types.'}`,
+            },
+          ].map((ins, i) => (
+            <div key={i} className={`flex gap-3 p-3 rounded-lg border mb-2 ${ins.bg}`}>
+              <span className={`text-sm ${ins.color} flex-shrink-0 mt-0.5`}>{ins.icon}</span>
+              <p className="text-[11px] text-[#666] leading-relaxed">{ins.text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function VoiceTab({ hotConv }: any) {
+  const [transcriptOpen, setTranscriptOpen] = useState(false)
+  const custName = hotConv?.customer?.name || 'Priya Sharma'
+  const firstName = custName.split(' ')[0]
+  const callTime = new Date(Date.now() - 15 * 60 * 1000).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+
+  const transcript = [
+    { role: 'Aria', text: `Hi ${firstName}, I'm calling personally to resolve your order issue — I know how important this is.` },
+    { role: 'Customer', text: "I needed this for my wedding, I'm really frustrated." },
+    { role: 'Aria', text: "I completely understand. I've processed your full refund right now, and applied a 15% discount on your next order." },
+    { role: 'Customer', text: "Oh... thank you, I really wasn't expecting a call." },
+    { role: 'Aria', text: "Of course. I've also arranged priority express redelivery so you still have options before the event." },
+    { role: 'Customer', text: "That genuinely helps. Thank you for reaching out." },
+    { role: 'Aria', text: "Absolutely — you'll get a confirmation shortly. Is there anything else I can help you with?" },
+  ]
+  const visibleLines = transcriptOpen ? transcript : transcript.slice(0, 3)
+
+  const voiceStats = [
+    { label: 'Total calls', value: '1', color: '#e5e5e5' },
+    { label: 'Avg duration', value: '2m 34s', color: '#e5e5e5' },
+    { label: 'Resolution via voice', value: '100%', color: '#10b981' },
+  ]
+
+  const summaryFields = [
+    { label: 'Duration', value: '2m 34s', color: '#e5e5e5' },
+    { label: 'Customer', value: custName, color: '#e5e5e5' },
+    { label: 'Sentiment before call', value: 'Critical 10/100', color: '#ef4444' },
+    { label: 'Sentiment after call', value: 'Neutral 52/100', color: '#f59e0b' },
+  ]
+
+  return (
+    <div className="flex-1 p-6 overflow-y-auto">
+      <div className="mb-6">
+        <h2 className="text-sm font-medium text-[#e5e5e5] tracking-wide">Voice callbacks</h2>
+        <p className="text-[11px] text-[#444] mt-0.5">AI-powered escalation calls from browser</p>
+      </div>
+
+      {/* Last Call Summary — highlighted emerald card */}
+      <div data-tour="voice-summary" className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-5 mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-[9px] text-emerald-300/70 uppercase tracking-widest">Last call summary</p>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              <span className="text-[10px] text-emerald-400 uppercase tracking-widest">Completed</span>
+            </div>
+            <span className="text-[10px] text-[#555] font-mono">{callTime}</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {summaryFields.map((f, i) => (
+            <div key={i}>
+              <p className="text-[9px] text-[#555] uppercase tracking-widest mb-1">{f.label}</p>
+              <p className="text-[13px] font-mono" style={{ color: f.color }}>{f.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 pt-4 border-t border-emerald-500/15">
+          <p className="text-[9px] text-[#555] uppercase tracking-widest mb-1">Resolution</p>
+          <p className="text-xs text-emerald-300 flex items-center gap-1.5">
+            <span className="text-emerald-500">✓</span>
+            Refund processed + 15% discount applied
+          </p>
+        </div>
+      </div>
+
+      {/* Call Transcript Preview */}
+      <div className="rounded-lg border border-[#141414] p-5 mb-4" style={{ background: '#0a0f0c' }}>
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-[9px] text-[#444] uppercase tracking-widest">Call transcript preview</p>
+          <span className="text-[9px] text-emerald-500/50 font-mono tracking-widest">VAPI · VOICE</span>
+        </div>
+        <div className="space-y-3">
+          {visibleLines.map((line, i) => (
+            <div key={i} className="flex gap-2.5">
+              <span className={cn('text-[10px] font-medium flex-shrink-0 mt-0.5 w-16', line.role === 'Aria' ? 'text-emerald-400' : 'text-[#888]')}>
+                {line.role}
+              </span>
+              <p className="text-[11px] text-[#bbb] leading-relaxed">{line.text}</p>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={() => setTranscriptOpen(o => !o)}
+          className="mt-4 text-[10px] text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors"
+        >
+          {transcriptOpen ? 'Show less ↑' : 'View full transcript ↓'}
+        </button>
+      </div>
+
+      {/* Voice Escalation Stats */}
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        {voiceStats.map((s, i) => (
+          <div key={i} className="bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-4">
+            <p className="text-[9px] text-[#444] uppercase tracking-widest mb-1.5">{s.label}</p>
+            <p className="text-xl font-semibold font-mono" style={{ color: s.color }}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Existing: VoiceDemo + How escalation works */}
+      <div className="grid grid-cols-2 gap-4">
+        <VoiceDemo
+          customer={hotConv?.customer}
+          conversationSummary={hotConv?.lastMessage?.content || 'Customer escalation'}
+        />
+        <div className="bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-5">
+          <p className="text-[9px] text-[#444] uppercase tracking-widest mb-5">How escalation works</p>
+          <div className="space-y-5">
+            {[
+              { n: '01', t: 'Frustration detected', d: 'Sentiment drops below 25. Churn risk flagged automatically.' },
+              { n: '02', t: 'AI summary generated', d: 'Full conversation briefing prepared for human agent in 2 seconds.' },
+              { n: '03', t: 'Voice callback initiated', d: 'Aria calls customer directly from browser — no phone needed.' },
+              { n: '04', t: 'Memory updated', d: 'Call transcript saved. Next interaction knows full history.' },
+            ].map((s, i) => (
+              <div key={i} className="flex gap-3">
+                <span className="text-[10px] text-emerald-500/50 font-mono mt-0.5 flex-shrink-0">{s.n}</span>
+                <div>
+                  <p className="text-xs text-[#ccc]">{s.t}</p>
+                  <p className="text-[11px] text-[#444] mt-0.5 leading-relaxed">{s.d}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -398,85 +863,14 @@ export default function Dashboard() {
       )}
 
       {activeTab === 'analytics' && (
-        <div className="flex-1 p-6 overflow-y-auto">
-          <div className="mb-6">
-            <h2 className="text-sm font-medium text-[#e5e5e5] tracking-wide">Analytics</h2>
-            <p className="text-[11px] text-[#444] mt-0.5">Sentiment and performance over time</p>
-          </div>
-          <div className="grid grid-cols-3 gap-3 mb-6">
-            {[
-              { label: 'Total conversations', value: stats.totalConversations },
-              { label: 'Avg sentiment', value: `${stats.avgSentiment}/100`, color: stats.avgSentiment > 60 ? '#10b981' : '#f59e0b' },
-              { label: 'VIP customers', value: `${stats.vipCustomers} of ${stats.totalCustomers}`, color: '#f59e0b' },
-            ].map((s, i) => (
-              <div key={i} className={cn('bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-4', pulse ? 'animate-flash' : '')}>
-                <p className="text-[9px] text-[#444] uppercase tracking-widest mb-2">{s.label}</p>
-                <p className="text-2xl font-semibold font-mono" style={{color: (s as any).color || '#e5e5e5'}}>{s.value}</p>
-              </div>
-            ))}
-          </div>
-          <div className="bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-5">
-            <p className="text-[9px] text-[#444] uppercase tracking-widest mb-4">Sentiment trend</p>
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={sentimentTrend}>
-                <defs>
-                  <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.15}/>
-                    <stop offset="100%" stopColor="#10b981" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="index" tick={{fontSize:10, fill:'#333'}} axisLine={false} tickLine={false}/>
-                <YAxis domain={[0,100]} tick={{fontSize:10, fill:'#333'}} axisLine={false} tickLine={false}/>
-                <Tooltip contentStyle={{background:'#111',border:'1px solid #222',borderRadius:6,fontSize:11}} itemStyle={{color:'#10b981'}} labelStyle={{color:'#555'}} formatter={(v:any) => [`${v}/100`,'Score']}/>
-                <Area type="monotone" dataKey="score" stroke="#10b981" strokeWidth={1.5} fill="url(#sg)" dot={false}/>
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div data-tour="ai-insights" className="bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-5 mt-4">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-[9px] text-[#444] uppercase tracking-widest">AI insights</p>
-              <div className="flex items-center gap-1.5">
-                <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
-                <span className="text-[9px] text-[#333]">Generated from live data</span>
-              </div>
-            </div>
-            <div className="space-y-0">
-              {[
-                {
-                  icon: '↑',
-                  color: 'text-red-400',
-                  bg: 'bg-red-500/5 border-red-500/10',
-                  text: `${stats.escalatedConversations} conversations escalated this session — all involved delayed orders. Delivery reliability is your #1 churn driver right now.`
-                },
-                {
-                  icon: '◎',
-                  color: 'text-amber-400',
-                  bg: 'bg-amber-500/5 border-amber-500/10',
-                  text: `VIP customers are ${stats.vipCustomers} of ${stats.totalCustomers} tracked but represent the majority of escalations. A dedicated VIP SLA would significantly reduce churn risk.`
-                },
-                {
-                  icon: '⚡',
-                  color: 'text-emerald-400',
-                  bg: 'bg-emerald-500/5 border-emerald-500/10',
-                  text: `Proactive outreach intercepted ${stats.proactiveConversations} potential complaints before they escalated. Estimated ₹${(stats.proactiveConversations * 800).toLocaleString()} in retention value generated autonomously.`
-                },
-                {
-                  icon: '◈',
-                  color: 'text-blue-400',
-                  bg: 'bg-blue-500/5 border-blue-500/10',
-                  text: `Resolution rate is ${stats.resolutionRate}% — ${stats.resolutionRate > 70 ? 'strong performance. Most issues resolved without human intervention.' : 'below target. Consider expanding autonomous resolution rules for common complaint types.'}`
-                },
-              ].map((ins, i) => (
-                <div key={i} className={`flex gap-3 p-3 rounded-lg border mb-2 ${ins.bg}`}>
-                  <span className={`text-sm ${ins.color} flex-shrink-0 mt-0.5`}>{ins.icon}</span>
-                  <p className="text-[11px] text-[#666] leading-relaxed">{ins.text}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-        </div>
+        <AnalyticsTab
+          stats={stats}
+          actions={actions}
+          sentimentTrend={sentimentTrend}
+          sentimentBreakdown={data.sentimentBreakdown}
+          customerHealthScores={data.customerHealthScores}
+          pulse={pulse}
+        />
       )}
 
       {activeTab === 'customers' && (
@@ -577,39 +971,7 @@ export default function Dashboard() {
   </div>
 )}
 
-      {activeTab === 'voice' && (
-        <div className="flex-1 p-6 overflow-y-auto">
-          <div className="mb-6">
-            <h2 className="text-sm font-medium text-[#e5e5e5] tracking-wide">Voice callbacks</h2>
-            <p className="text-[11px] text-[#444] mt-0.5">AI-powered escalation calls from browser</p>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <VoiceDemo
-              customer={hotConv?.customer}
-              conversationSummary={hotConv?.lastMessage?.content || 'Customer escalation'}
-            />
-            <div className="bg-[#0d0d0d] border border-[#1a1a1a] rounded-lg p-5">
-              <p className="text-[9px] text-[#444] uppercase tracking-widest mb-5">How escalation works</p>
-              <div className="space-y-5">
-                {[
-                  {n:'01', t:'Frustration detected', d:'Sentiment drops below 25. Churn risk flagged automatically.'},
-                  {n:'02', t:'AI summary generated', d:'Full conversation briefing prepared for human agent in 2 seconds.'},
-                  {n:'03', t:'Voice callback initiated', d:'Aria calls customer directly from browser — no phone needed.'},
-                  {n:'04', t:'Memory updated', d:'Call transcript saved. Next interaction knows full history.'},
-                ].map((s,i) => (
-                  <div key={i} className="flex gap-3">
-                    <span className="text-[10px] text-emerald-500/50 font-mono mt-0.5 flex-shrink-0">{s.n}</span>
-                    <div>
-                      <p className="text-xs text-[#ccc]">{s.t}</p>
-                      <p className="text-[11px] text-[#444] mt-0.5 leading-relaxed">{s.d}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {activeTab === 'voice' && <VoiceTab hotConv={hotConv} />}
 
       {/* Bottom status bar */}
       <div className="h-7 bg-[#0d0d0d] border-t border-[#141414] flex items-center justify-between px-6 flex-shrink-0">

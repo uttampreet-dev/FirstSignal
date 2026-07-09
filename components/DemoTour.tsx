@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react'
 
 export interface TourStep {
   /** Dashboard tab this step's target lives on. */
@@ -27,6 +27,8 @@ export default function DemoTour({
 }) {
   const [step, setStep] = useState(0)
   const [rect, setRect] = useState<DOMRect | null>(null)
+  const [cardH, setCardH] = useState(200)
+  const cardRef = useRef<HTMLDivElement>(null)
   const current = steps[step]
 
   const next = useCallback(() => {
@@ -42,17 +44,29 @@ export default function DemoTour({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step])
 
-  // Measure the target once the DOM (and any tab switch) has settled
+  // Measure the target once the DOM (and any tab switch) has settled.
+  // Scroll it into view first; the capture-phase scroll listener below keeps
+  // the spotlight aligned as the smooth scroll settles.
   useEffect(() => {
     const measure = () => {
       const el = document.querySelector(`[data-tour="${current.selector}"]`) as HTMLElement | null
-      setRect(el ? el.getBoundingClientRect() : null)
+      if (el) {
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        setRect(el.getBoundingClientRect())
+      } else {
+        setRect(null)
+      }
     }
     // Give a tab switch time to render before measuring
-    const delay = current.tab !== activeTab ? 280 : 60
+    const delay = current.tab !== activeTab ? 300 : 80
     const t = setTimeout(measure, delay)
     return () => clearTimeout(t)
   }, [step, activeTab, current.selector, current.tab])
+
+  // Track the card's real height so we can keep it fully on-screen
+  useLayoutEffect(() => {
+    if (cardRef.current) setCardH(cardRef.current.offsetHeight)
+  }, [step, rect])
 
   // Keep the spotlight aligned on resize/scroll
   useEffect(() => {
@@ -87,14 +101,25 @@ export default function DemoTour({
 
   const isLast = step === steps.length - 1
 
-  // Position the tooltip card near the target (below if there's room, else above)
+  // Position the tooltip card near the target, always clamped fully on-screen.
   let cardStyle: React.CSSProperties = { top: '50%', left: '50%', transform: 'translate(-50%,-50%)' }
   if (rect) {
-    const placeBelow = window.innerHeight - rect.bottom > 220
-    const left = Math.min(Math.max(rect.left, 16), window.innerWidth - CARD_WIDTH - 16)
-    cardStyle = placeBelow
-      ? { top: rect.bottom + 14, left }
-      : { top: rect.top - 14, left, transform: 'translateY(-100%)' }
+    const M = 16   // viewport margin
+    const GAP = 14 // gap between target and card
+    const vh = window.innerHeight
+    const left = Math.min(Math.max(rect.left, M), window.innerWidth - CARD_WIDTH - M)
+
+    let top: number
+    if (vh - rect.bottom > cardH + GAP + M) {
+      top = rect.bottom + GAP                 // below the target
+    } else if (rect.top > cardH + GAP + M) {
+      top = rect.top - GAP - cardH            // above the target
+    } else {
+      top = rect.top                          // target fills the screen — sit near its top
+    }
+    // Never let the card overflow the top or bottom edge
+    top = Math.min(Math.max(top, M), Math.max(vh - cardH - M, M))
+    cardStyle = { top, left, transform: 'none' }
   }
 
   return (
@@ -124,6 +149,7 @@ export default function DemoTour({
 
       {/* Tooltip card */}
       <div
+        ref={cardRef}
         className="fixed rounded-xl bg-[#0d0d0d] border border-[#1a1a1a] shadow-2xl overflow-hidden"
         style={{ width: CARD_WIDTH, ...cardStyle }}
       >
