@@ -14,6 +14,12 @@ const TOUR_STEPS: TourStep[] = [
   },
   {
     tab: 'live',
+    selector: 'proactive-demo',
+    title: 'Proactive Prevention',
+    description: 'FirstSignal doesn\'t wait for complaints. Click "Simulate Delayed Order" to watch Aria detect an at-risk order and reach out before the customer even notices — churn prevented autonomously.',
+  },
+  {
+    tab: 'live',
     selector: 'sentiment-ring',
     title: 'At-Risk Sentiment Ring',
     description: 'The single most at-risk customer right now, scored 0–100. When it drops into the red, FirstSignal flags churn risk and can escalate automatically.',
@@ -59,6 +65,12 @@ const TOUR_STEPS: TourStep[] = [
     selector: 'voice-summary',
     title: 'Voice Escalations',
     description: 'When sentiment turns critical, Aria places an AI voice call from the browser. Each call is summarised here — sentiment lift, resolution, and full transcript.',
+  },
+  {
+    tab: 'impact',
+    selector: 'impact-hero',
+    title: 'Business Impact',
+    description: 'Every action quantified — revenue protected, agent hours saved, and churn prevented, with a clear ROI multiple. The bottom line for why FirstSignal pays for itself.',
   },
 ]
 function ConversationDetail({ conversationId, onClose }: { conversationId: string, onClose: () => void }) {
@@ -511,7 +523,7 @@ function ImpactTab({ stats, actions }: any) {
       </div>
 
       {/* SECTION 1 — Hero metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+      <div data-tour="impact-hero" className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
         {heroCards.map((c, i) => (
           <div key={i} className="bg-[#0d0d0d] border rounded-xl p-5" style={{ borderColor: `${c.color}33` }}>
             <p className="text-[9px] text-[#555] uppercase tracking-widest mb-2">{c.label}</p>
@@ -615,13 +627,16 @@ function ProactiveDemo({ onComplete }: { onComplete: () => void }) {
     }
   }
 
-  const reset = () => {
+  const reset = async () => {
     clearTimers()
     setStatus('idle'); setVisibleSteps(0); setOrderNumber(''); setError('')
+    // Remove the demo conversation/order from the DB, then refresh the feed
+    try { await fetch('/api/demo/reset', { method: 'POST' }) } catch {}
+    onComplete()
   }
 
   return (
-    <div className="bg-[#0a0f0c] border border-emerald-500/20 rounded-xl p-4" style={{ fontFamily: 'monospace' }}>
+    <div data-tour="proactive-demo" className="bg-[#0a0f0c] border border-emerald-500/20 rounded-xl p-4" style={{ fontFamily: 'monospace' }}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-medium text-emerald-500">Proactive Intelligence Demo</p>
@@ -907,7 +922,7 @@ export default function Dashboard() {
           <button onClick={() => setTourOpen(true)}
             className="flex items-center gap-1.5 text-[10px] tracking-widest text-[#444] hover:text-[#888] uppercase bg-[#0d0d0d] border border-[#1a1a1a] hover:border-[#222] px-3 py-1 rounded transition-all">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/><path d="M12 16v-4M12 8h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
-            Take Tour
+            Guided Demo
           </button>
           <a href="/chat" className="text-[10px] tracking-widest text-emerald-500 hover:text-emerald-400 uppercase border border-emerald-500/30 px-3 py-1 rounded hover:bg-emerald-500/5 transition-all">
             Open Demo →
@@ -1210,7 +1225,7 @@ export default function Dashboard() {
           steps={TOUR_STEPS}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
-          onClose={() => setTourOpen(false)}
+          onClose={() => { setTourOpen(false); setActiveTab('live') }}
         />
       )}
 

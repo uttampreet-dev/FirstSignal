@@ -19,13 +19,24 @@ export default {
         stepin: {
           '0%': { opacity: '0', transform: 'translateY(4px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' }
+        },
+        pulseBorder: {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.4' }
+        },
+        fadein: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' }
         }
       },
       animation: {
         scroll: 'scroll 25s linear infinite',
         flash: 'flash 0.6s ease-out',
         tourbar: 'tourbar 8s linear',
-        stepin: 'stepin 0.4s ease-out'
+        tourbar5: 'tourbar 5s linear',
+        stepin: 'stepin 0.4s ease-out',
+        'pulse-border': 'pulseBorder 1.5s ease-in-out infinite',
+        fadein: 'fadein 0.25s ease-out'
       }
     },
   },

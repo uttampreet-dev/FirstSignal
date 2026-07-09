@@ -1,8 +1,82 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, type ReactNode } from 'react'
 import { getBrand, type Brand } from '@/lib/brands'
 
 const DEMO_CUSTOMER_ID = '11111111-1111-1111-1111-111111111111'
+
+interface ChatMessage {
+  role: string
+  content: string
+  sentiment?: any
+  isEscalated?: boolean
+  memoriesUsed?: number
+  action?: any
+}
+
+function traceColor(score: number) {
+  return score > 60 ? '#10b981' : score > 40 ? '#f59e0b' : score > 20 ? '#f97316' : '#ef4444'
+}
+
+function TraceRow({ label, children }: { label: string, children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-1">
+      <span className="text-[10px] text-[#444] flex-shrink-0">{label}</span>
+      <span className="text-[10px] text-right">{children}</span>
+    </div>
+  )
+}
+
+// Collapsible "AI reasoning" trace shown under an Aria message
+function ReasoningTrace({ msg }: { msg: ChatMessage }) {
+  const [open, setOpen] = useState(false)
+  const s = msg.sentiment
+  const hasSentiment = s && typeof s.score === 'number'
+  const hasMemory = typeof msg.memoriesUsed === 'number'
+  const hasChurn = s && typeof s.churnRisk !== 'undefined'
+  const hasAction = msg.action && msg.action.action && msg.action.action !== 'none'
+  const hasEscalated = typeof msg.isEscalated !== 'undefined'
+
+  if (!(hasSentiment || hasMemory || hasChurn || hasAction || hasEscalated)) return null
+
+  const label = hasSentiment
+    ? (s.score > 60 ? 'Positive' : s.score > 40 ? 'Neutral' : s.score > 20 ? 'At risk' : 'Critical')
+    : ''
+
+  return (
+    <div className="w-full mt-1">
+      <button onClick={() => setOpen(o => !o)}
+        className="text-[10px] text-[#333] hover:text-[#555] transition-colors" style={{ fontFamily: 'monospace' }}>
+        {open ? '▾' : '▸'} AI reasoning
+      </button>
+      <div className="overflow-hidden transition-all duration-300 ease-out" style={{ maxHeight: open ? 320 : 0 }}>
+        <div className="mt-1.5 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-3 py-1.5" style={{ fontFamily: 'monospace' }}>
+          {hasSentiment && (
+            <TraceRow label="Sentiment">
+              <span className="inline-flex items-center gap-1.5 align-middle">
+                <span className="inline-block w-12 h-0.5 bg-[#1a1a1a] rounded overflow-hidden align-middle">
+                  <span className="block h-full rounded" style={{ width: `${s.score}%`, background: traceColor(s.score) }}></span>
+                </span>
+                <span style={{ color: traceColor(s.score) }}>{s.score}/100 · {label}</span>
+              </span>
+            </TraceRow>
+          )}
+          {hasMemory && (
+            <TraceRow label="Memory"><span className="text-[#888]">{msg.memoriesUsed} past interactions retrieved</span></TraceRow>
+          )}
+          {hasChurn && (
+            <TraceRow label="Churn risk"><span style={{ color: s.churnRisk ? '#ef4444' : '#10b981' }}>{s.churnRisk ? 'HIGH' : 'LOW'}</span></TraceRow>
+          )}
+          {hasAction && (
+            <TraceRow label="Action"><span className="text-emerald-400">{msg.action.action} → {msg.action.message}</span></TraceRow>
+          )}
+          {hasEscalated && (
+            <TraceRow label="Escalated"><span style={{ color: msg.isEscalated ? '#ef4444' : '#555' }}>{msg.isEscalated ? 'Yes' : 'No'}</span></TraceRow>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function TypingDots() {
   return (
@@ -43,7 +117,7 @@ function SentimentBar({ score, language }: { score: number, language?: string })
 
 export default function ChatWidget({ brand }: { brand?: Brand }) {
   const activeBrand = brand ?? getBrand()
-  const [messages, setMessages] = useState([
+  const [messages, setMessages] = useState<ChatMessage[]>([
     { role: 'assistant', content: `Hi! I'm ${activeBrand.agentName} from ${activeBrand.name} support. How can I help you today?`, sentiment: null }
   ])
   const [conversationId, setConversationId] = useState<string | null>(null)
@@ -85,7 +159,10 @@ export default function ChatWidget({ brand }: { brand?: Brand }) {
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: data.reply,
-        sentiment: data.sentiment
+        sentiment: data.sentiment,
+        isEscalated: data.isEscalated,
+        memoriesUsed: data.memoriesUsed,
+        action: data.action
       }])
     } catch {
       setMessages(prev => [...prev, {
@@ -146,12 +223,15 @@ export default function ChatWidget({ brand }: { brand?: Brand }) {
                 <span className="text-emerald-400 text-[9px]">{activeBrand.agentName[0]}</span>
               </div>
             )}
-            <div className={`max-w-[78%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${
-              msg.role === 'user'
-                ? 'bg-[#1a1a1a] text-[#ccc] rounded-br-sm border border-[#222]'
-                : 'bg-[#111] text-[#ddd] rounded-bl-sm border border-[#1a1a1a]'
-            }`}>
-              {msg.content}
+            <div className={`max-w-[78%] flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+              <div className={`rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${
+                msg.role === 'user'
+                  ? 'bg-[#1a1a1a] text-[#ccc] rounded-br-sm border border-[#222]'
+                  : 'bg-[#111] text-[#ddd] rounded-bl-sm border border-[#1a1a1a]'
+              }`}>
+                {msg.content}
+              </div>
+              {msg.role === 'assistant' && <ReasoningTrace msg={msg} />}
             </div>
           </div>
         ))}

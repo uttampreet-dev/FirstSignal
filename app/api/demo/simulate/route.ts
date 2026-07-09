@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import { sendDelayedOrderOutreach } from '@/lib/proactive-outreach'
+import { cleanupDemoArtifacts } from '@/lib/demo-cleanup'
 import { NextResponse } from 'next/server'
 
 // Demo customer — Meera Patel (VIP)
@@ -7,6 +8,9 @@ const DEMO_CUSTOMER_ID = '44444444-4444-4444-4444-444444444444'
 
 export async function POST() {
   try {
+    // Clear any prior demo intercept so repeated runs never accumulate duplicates
+    await cleanupDemoArtifacts()
+
     const orderNumber = 'ORD-DEMO-' + Date.now()
     const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
 
