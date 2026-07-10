@@ -52,7 +52,7 @@ export default function Home() {
   }, [loopKey])
 
   return (
-    <div className="min-h-screen bg-[#080808] text-[#e5e5e5] flex flex-col overflow-hidden" style={{fontFamily:'monospace'}}>
+    <div className="h-screen bg-[#080808] text-[#e5e5e5] flex flex-col overflow-hidden" style={{fontFamily:'monospace'}}>
 
       {/* Top nav — minimal */}
       <nav className="h-11 border-b border-[#111] flex items-center justify-between px-8 flex-shrink-0 z-10">
@@ -74,11 +74,11 @@ export default function Home() {
       <div className="flex flex-1 overflow-hidden">
 
         {/* Left panel — context */}
-        <div className="w-72 border-r border-[#111] flex flex-col flex-shrink-0">
+        <div className="w-72 border-r border-[#111] flex flex-col flex-shrink-0 overflow-y-auto">
 
           {/* Main statement */}
-          <div className="p-8 border-b border-[#111]">
-            <p className="text-[9px] text-[#333] uppercase tracking-widest mb-4">What this is</p>
+          <div className="p-5 border-b border-[#111]">
+            <p className="text-[9px] text-[#333] uppercase tracking-widest mb-3">What this is</p>
             <p className="text-lg font-medium leading-snug">
   <span className="text-[#e5e5e5]">An AI that resolves</span>
   <br/>
@@ -91,8 +91,8 @@ export default function Home() {
           </div>
 
           {/* Live metrics */}
-          <div className="p-6 border-b border-[#111]">
-            <p className="text-[9px] text-[#333] uppercase tracking-widest mb-4">Live system</p>
+          <div className="p-5 border-b border-[#111]">
+            <p className="text-[9px] text-[#333] uppercase tracking-widest mb-3">Live system</p>
             <div className="space-y-4">
               {[
                 { label: 'Response time', value: '<800ms', color: '#10b981' },
@@ -109,8 +109,8 @@ export default function Home() {
           </div>
 
           {/* What it does */}
-          <div className="p-6 border-b border-[#111]">
-            <p className="text-[9px] text-[#333] uppercase tracking-widest mb-4">Capabilities</p>
+          <div className="p-5 border-b border-[#111]">
+            <p className="text-[9px] text-[#333] uppercase tracking-widest mb-3">Capabilities</p>
             <div className="space-y-3">
               {[
                 { label: 'Sentiment detection', active: true },
@@ -129,8 +129,8 @@ export default function Home() {
           </div>
 
           {/* Stack */}
-          <div className="p-6">
-            <p className="text-[9px] text-[#333] uppercase tracking-widest mb-4">Stack</p>
+          <div className="p-5">
+            <p className="text-[9px] text-[#333] uppercase tracking-widest mb-3">Stack</p>
             <div className="flex flex-wrap gap-1.5">
               {['Next.js', 'Supabase', 'Groq', 'VAPI', 'Tailwind', 'pgvector'].map((t, i) => (
                 <span key={i} className="text-[9px] text-[#444] border border-[#161616] px-2 py-0.5 rounded">{t}</span>
@@ -213,10 +213,10 @@ export default function Home() {
         </div>
 
         {/* Right panel — system status */}
-        <div className="w-64 border-l border-[#111] flex flex-col flex-shrink-0">
+        <div className="w-64 border-l border-[#111] flex flex-col flex-shrink-0 overflow-y-auto">
 
-          <div className="p-6 border-b border-[#111]">
-            <p className="text-[9px] text-[#333] uppercase tracking-widest mb-4">System status</p>
+          <div className="p-5 border-b border-[#111]">
+            <p className="text-[9px] text-[#333] uppercase tracking-widest mb-3">System status</p>
             <div className="space-y-3">
               {[
                 { label: 'AI engine', status: 'operational', color: 'bg-emerald-500' },
@@ -236,8 +236,8 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="p-6 border-b border-[#111]">
-            <p className="text-[9px] text-[#333] uppercase tracking-widest mb-4">Actions fired today</p>
+          <div className="p-5 border-b border-[#111]">
+            <p className="text-[9px] text-[#333] uppercase tracking-widest mb-3">Actions fired today</p>
             <div className="space-y-2.5">
               {[
                 { label: 'Refunds', value: '1', color: '#ef4444' },
@@ -254,8 +254,8 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="p-6">
-  <p className="text-[9px] text-[#333] uppercase tracking-widest mb-4">Agent architecture</p>
+          <div className="p-5">
+  <p className="text-[9px] text-[#333] uppercase tracking-widest mb-3">Agent architecture</p>
   <div className="space-y-0">
     {[
       { name: 'Sentiment Agent', desc: 'Scores every message 0-100', color: 'text-red-400', border: 'border-red-500/20' },
@@ -266,13 +266,13 @@ export default function Home() {
       { name: 'Voice Agent', desc: 'Handles escalations', color: 'text-emerald-400', border: 'border-emerald-500/20' },
     ].map((a, i, arr) => (
       <div key={i} className="flex flex-col items-start">
-        <div className={`w-full px-2.5 py-2 border ${a.border} rounded bg-[#0a0a0a]`}>
+        <div className={`w-full px-2.5 py-1.5 border ${a.border} rounded bg-[#0a0a0a]`}>
           <p className={`text-[10px] font-medium ${a.color}`}>{a.name}</p>
           <p className="text-[9px] text-[#333] mt-0.5">{a.desc}</p>
         </div>
         {i < arr.length - 1 && (
-          <div className="flex items-center gap-1 ml-3 py-0.5">
-            <div className="w-px h-3 bg-[#1a1a1a]"></div>
+          <div className="flex items-center gap-1 ml-3">
+            <div className="w-px h-2 bg-[#1a1a1a]"></div>
             <span className="text-[8px] text-[#222]">↓</span>
           </div>
         )}
