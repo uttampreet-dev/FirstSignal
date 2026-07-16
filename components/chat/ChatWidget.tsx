@@ -4,13 +4,31 @@ import { getBrand, type Brand } from '@/lib/brands'
 
 const DEMO_CUSTOMER_ID = '11111111-1111-1111-1111-111111111111'
 
+interface TraceStep {
+  agent: string
+  decision: string
+  detail?: string
+  ms: number
+}
+
+interface GuardrailOutcome {
+  action: string
+  allowed: boolean
+  rule: string
+  reason: string
+}
+
 interface ChatMessage {
   role: string
   content: string
   sentiment?: any
   isEscalated?: boolean
   memoriesUsed?: number
+  memoryMode?: string
   action?: any
+  guardrails?: GuardrailOutcome[]
+  injectionFlagged?: boolean
+  trace?: { steps: TraceStep[]; totalMs: number }
 }
 
 function traceColor(score: number) {
@@ -36,7 +54,9 @@ function ReasoningTrace({ msg }: { msg: ChatMessage }) {
   const hasAction = msg.action && msg.action.action && msg.action.action !== 'none'
   const hasEscalated = typeof msg.isEscalated !== 'undefined'
 
-  if (!(hasSentiment || hasMemory || hasChurn || hasAction || hasEscalated)) return null
+  const hasTrace = Boolean(msg.trace?.steps?.length || msg.guardrails?.length)
+
+  if (!(hasSentiment || hasMemory || hasChurn || hasAction || hasEscalated || hasTrace)) return null
 
   const label = hasSentiment
     ? (s.score > 60 ? 'Positive' : s.score > 40 ? 'Neutral' : s.score > 20 ? 'At risk' : 'Critical')
@@ -48,7 +68,7 @@ function ReasoningTrace({ msg }: { msg: ChatMessage }) {
         className="text-[10px] text-[#333] hover:text-[#555] transition-colors" style={{ fontFamily: 'monospace' }}>
         {open ? '▾' : '▸'} AI reasoning
       </button>
-      <div className="overflow-hidden transition-all duration-300 ease-out" style={{ maxHeight: open ? 320 : 0 }}>
+      <div className="overflow-hidden transition-all duration-300 ease-out" style={{ maxHeight: open ? 640 : 0 }}>
         <div className="mt-1.5 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg px-3 py-1.5" style={{ fontFamily: 'monospace' }}>
           {hasSentiment && (
             <TraceRow label="Sentiment">
@@ -61,7 +81,11 @@ function ReasoningTrace({ msg }: { msg: ChatMessage }) {
             </TraceRow>
           )}
           {hasMemory && (
-            <TraceRow label="Memory"><span className="text-[#888]">{msg.memoriesUsed} past interactions retrieved</span></TraceRow>
+            <TraceRow label="Memory">
+              <span className="text-[#888]">
+                {msg.memoriesUsed} memories{msg.memoryMode === 'semantic' ? ' · pgvector similarity' : ''}
+              </span>
+            </TraceRow>
           )}
           {hasChurn && (
             <TraceRow label="Churn risk"><span style={{ color: s.churnRisk ? '#ef4444' : '#10b981' }}>{s.churnRisk ? 'HIGH' : 'LOW'}</span></TraceRow>
@@ -71,6 +95,40 @@ function ReasoningTrace({ msg }: { msg: ChatMessage }) {
           )}
           {hasEscalated && (
             <TraceRow label="Escalated"><span style={{ color: msg.isEscalated ? '#ef4444' : '#555' }}>{msg.isEscalated ? 'Yes' : 'No'}</span></TraceRow>
+          )}
+
+          {/* Guardrail verdicts — every action the model proposed, allowed or blocked */}
+          {(msg.guardrails || []).length > 0 && (
+            <div className="mt-1 pt-1 border-t border-[#141414]">
+              {msg.guardrails!.map((g, i) => (
+                <div key={i} className="py-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[10px] text-[#444]">Guardrail</span>
+                    <span className="text-[10px]" style={{ color: g.allowed ? '#10b981' : '#ef4444' }}>
+                      {g.action} → {g.allowed ? '✓ allowed' : '✗ blocked'} · {g.rule}
+                    </span>
+                  </div>
+                  {!g.allowed && <p className="text-[9px] text-[#666] text-right mt-0.5">{g.reason}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Full pipeline timeline */}
+          {msg.trace && msg.trace.steps.length > 0 && (
+            <div className="mt-1 pt-1 border-t border-[#141414]">
+              <div className="flex items-center justify-between py-0.5">
+                <span className="text-[10px] text-[#444]">Pipeline</span>
+                <span className="text-[10px] text-[#555]">{msg.trace.totalMs}ms total</span>
+              </div>
+              {msg.trace.steps.map((s, i) => (
+                <div key={i} className="flex items-baseline justify-between gap-2 py-0.5">
+                  <span className="text-[9px] text-emerald-500/60 w-20 flex-shrink-0">{s.agent}</span>
+                  <span className="text-[9px] text-[#777] flex-1 text-right leading-relaxed">{s.decision}</span>
+                  <span className="text-[9px] text-[#3a3a3a] w-12 text-right flex-shrink-0">{s.ms}ms</span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -122,6 +180,8 @@ export default function ChatWidget({ brand }: { brand?: Brand }) {
   ])
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [liveSteps, setLiveSteps] = useState<TraceStep[]>([])
+  const [liveReply, setLiveReply] = useState('')
   const [input, setInput] = useState('')
   const [sentiment, setSentiment] = useState(50)
   const [isEscalated, setIsEscalated] = useState(false)
@@ -132,7 +192,7 @@ export default function ChatWidget({ brand }: { brand?: Brand }) {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, loading])
+  }, [messages, loading, liveSteps, liveReply])
 
   const sendMessage = async (text: string) => {
     if (!text.trim() || loading) return
@@ -142,14 +202,7 @@ export default function ChatWidget({ brand }: { brand?: Brand }) {
     const userMsg = { role: 'user', content: text, sentiment: null }
     setMessages(prev => [...prev, userMsg])
 
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, customerId: DEMO_CUSTOMER_ID, conversationId, brandId: activeBrand.id })
-      })
-      const data = await res.json()
-
+    const applyResult = (data: any) => {
       if (data.conversationId) setConversationId(data.conversationId)
       if (data.sentiment?.score) setSentiment(data.sentiment.score)
       if (data.isEscalated) setIsEscalated(true)
@@ -162,8 +215,53 @@ export default function ChatWidget({ brand }: { brand?: Brand }) {
         sentiment: data.sentiment,
         isEscalated: data.isEscalated,
         memoriesUsed: data.memoriesUsed,
-        action: data.action
+        memoryMode: data.memoryMode,
+        action: data.action,
+        guardrails: data.guardrails,
+        injectionFlagged: data.injectionFlagged,
+        trace: data.trace
       }])
+    }
+
+    try {
+      // Stream the pipeline live: agent steps as they execute, reply tokens as
+      // they're generated, then a final `done` event with the full result.
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+        body: JSON.stringify({ message: text, customerId: DEMO_CUSTOMER_ID, conversationId, brandId: activeBrand.id })
+      })
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+      if (!(res.headers.get('content-type') || '').includes('text/event-stream')) {
+        applyResult(await res.json())
+        return
+      }
+
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let finished = false
+
+      while (!finished) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const frames = buffer.split('\n\n')
+        buffer = frames.pop() || ''
+        for (const frame of frames) {
+          const line = frame.trim()
+          if (!line.startsWith('data: ')) continue
+          const evt = JSON.parse(line.slice(6))
+          if (evt.type === 'step') setLiveSteps(prev => [...prev, evt.step])
+          else if (evt.type === 'token') setLiveReply(prev => prev + evt.text)
+          else if (evt.type === 'reset') setLiveReply('')
+          else if (evt.type === 'error') throw new Error(evt.message)
+          else if (evt.type === 'done') { applyResult(evt.result); finished = true }
+        }
+      }
+      if (!finished) throw new Error('stream ended early')
     } catch {
       setMessages(prev => [...prev, {
         role: 'assistant',
@@ -172,6 +270,8 @@ export default function ChatWidget({ brand }: { brand?: Brand }) {
       }])
     } finally {
       setLoading(false)
+      setLiveSteps([])
+      setLiveReply('')
       inputRef.current?.focus()
     }
   }
@@ -239,10 +339,31 @@ export default function ChatWidget({ brand }: { brand?: Brand }) {
         {loading && (
           <div className="flex justify-start gap-2">
             <div className="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="text-emerald-400 text-[9px]">A</span>
+              <span className="text-emerald-400 text-[9px]">{activeBrand.agentName[0]}</span>
             </div>
-            <div className="bg-[#111] border border-[#1a1a1a] rounded-2xl rounded-bl-sm">
-              <TypingDots />
+            <div className="max-w-[78%] flex flex-col items-start">
+              <div className="bg-[#111] border border-[#1a1a1a] rounded-2xl rounded-bl-sm">
+                {liveReply ? (
+                  <div className="px-3.5 py-2.5 text-xs leading-relaxed text-[#ddd]">
+                    {liveReply}
+                    <span className="inline-block w-1.5 h-3 ml-0.5 bg-emerald-400/80 align-middle animate-pulse"></span>
+                  </div>
+                ) : (
+                  <TypingDots />
+                )}
+              </div>
+              {/* Live pipeline — agents reporting in as they run */}
+              {liveSteps.length > 0 && (
+                <div className="mt-1 px-2 py-1 space-y-0.5" style={{ fontFamily: 'monospace' }}>
+                  {liveSteps.slice(-4).map((s, i, arr) => (
+                    <p key={`${s.agent}-${i}`} className="text-[9px] leading-tight transition-opacity"
+                      style={{ opacity: i === arr.length - 1 ? 1 : 0.45 }}>
+                      <span className="text-emerald-500/70">{s.agent}</span>
+                      <span className="text-[#555]"> · {s.decision}</span>
+                    </p>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -809,6 +809,120 @@ function VoiceTab({ hotConv }: any) {
   )
 }
 
+// Guardrails tab — the policy layer between the AI and real actions, live.
+// Every autonomous action the model proposes is checked and logged; blocked
+// attempts (including prompt-injection) show up here in real time.
+function GuardrailsTab({ guardrails, agentTraces, stats }: { guardrails: any, agentTraces: any[], stats: any }) {
+  const events = guardrails?.events || []
+  const g = guardrails?.stats || { total: 0, blocked: 0, allowed: 0 }
+  const policy = guardrails?.policy
+  const blockRate = g.total > 0 ? Math.round((g.blocked / g.total) * 100) : 0
+
+  const policyRules = policy ? [
+    { rule: 'Refund cap', detail: `Autonomous refunds limited to ₹${policy.maxAutonomousRefund?.toLocaleString()} — larger amounts require a human` },
+    { rule: 'Order ownership', detail: 'Actions only execute on orders that belong to the requesting customer' },
+    { rule: 'One compensation per order', detail: `Max ${policy.maxCompensationsPerOrder} refund/discount/redelivery per order` },
+    { rule: 'Discount bounds', detail: `Goodwill discounts restricted to ${policy.discountRange?.min}–${policy.discountRange?.max}%, one per ${policy.discountCooldownDays} days` },
+    { rule: 'Rate limit', detail: `Max ${policy.maxActionsPerConversation} autonomous actions per conversation, then auto-escalate` },
+    { rule: 'Injection screen', detail: 'Prompt-injection patterns disable tool access for the turn and get logged' },
+  ] : []
+
+  return (
+    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      {/* Stat row */}
+      <div className="grid grid-cols-4 gap-3">
+        {[
+          { label: 'Actions checked', value: g.total, color: '#e5e5e5' },
+          { label: 'Allowed', value: g.allowed, color: '#10b981' },
+          { label: 'Blocked', value: g.blocked, color: '#ef4444' },
+          { label: 'Avg pipeline', value: stats?.avgPipelineMs ? `${stats.avgPipelineMs}ms` : '—', color: '#3b82f6' },
+        ].map((s, i) => (
+          <div key={i} className="bg-[#0d0d0d] border border-[#141414] rounded-xl p-4">
+            <p className="text-[9px] text-[#333] uppercase tracking-widest mb-1">{s.label}</p>
+            <p className="text-2xl font-light" style={{ color: s.color }}>{s.value}</p>
+            {s.label === 'Blocked' && g.total > 0 && (
+              <p className="text-[9px] text-[#444] mt-0.5">{blockRate}% of proposals stopped by policy</p>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {/* Active policy */}
+        <div className="bg-[#0d0d0d] border border-[#141414] rounded-xl p-4">
+          <p className="text-[9px] text-[#333] uppercase tracking-widest mb-3">Active policy — checked before every action executes</p>
+          <div className="space-y-2.5">
+            {policyRules.map((p, i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <span className="text-emerald-500/70 text-[10px] mt-0.5">▣</span>
+                <div>
+                  <p className="text-[11px] text-[#ccc]">{p.rule}</p>
+                  <p className="text-[10px] text-[#444] leading-relaxed">{p.detail}</p>
+                </div>
+              </div>
+            ))}
+            {policyRules.length === 0 && <p className="text-[10px] text-[#444]">Policy unavailable</p>}
+          </div>
+        </div>
+
+        {/* Event feed */}
+        <div className="bg-[#0d0d0d] border border-[#141414] rounded-xl p-4">
+          <p className="text-[9px] text-[#333] uppercase tracking-widest mb-3">Verdict log — every proposed action, allowed or blocked</p>
+          <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+            {events.length === 0 && (
+              <p className="text-[10px] text-[#444]">No autonomous actions proposed yet. Try the chat demo — or try to jailbreak it.</p>
+            )}
+            {events.map((e: any) => (
+              <div key={e.id} className="border border-[#141414] rounded-lg px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] text-[#ccc]">{e.action}</span>
+                  <span className="text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded"
+                    style={e.verdict === 'blocked'
+                      ? { color: '#ef4444', backgroundColor: '#ef444415', border: '1px solid #ef444430' }
+                      : { color: '#10b981', backgroundColor: '#10b98112', border: '1px solid #10b98125' }}>
+                    {e.verdict}
+                  </span>
+                </div>
+                <p className="text-[10px] text-[#555] mt-1 leading-relaxed">{e.reason}</p>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-[9px] text-[#333]">{e.rule}</span>
+                  <span className="text-[9px] text-[#333]">{new Date(e.created_at).toLocaleTimeString('en-IN')}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Recent agent traces */}
+      <div className="bg-[#0d0d0d] border border-[#141414] rounded-xl p-4">
+        <p className="text-[9px] text-[#333] uppercase tracking-widest mb-3">Agent decision traces — the full pipeline per message</p>
+        <div className="space-y-3">
+          {(agentTraces || []).length === 0 && (
+            <p className="text-[10px] text-[#444]">Traces appear here after each chat message once the migration is applied.</p>
+          )}
+          {(agentTraces || []).slice(0, 5).map((t: any) => (
+            <div key={t.id} className="border border-[#141414] rounded-lg px-3 py-2">
+              <div className="flex items-center justify-between gap-3 mb-1.5">
+                <p className="text-[10px] text-[#999] truncate">"{t.message}"</p>
+                <span className="text-[9px] text-[#444] flex-shrink-0">{t.total_ms}ms · {new Date(t.created_at).toLocaleTimeString('en-IN')}</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {(t.steps || []).map((s: any, i: number) => (
+                  <span key={i} className="text-[9px] px-1.5 py-0.5 rounded bg-[#111] border border-[#1a1a1a] text-[#666]"
+                    title={s.detail || s.decision}>
+                    <span className="text-emerald-500/60">{s.agent}</span> {s.decision.length > 42 ? s.decision.slice(0, 42) + '…' : s.decision} <span className="text-[#3a3a3a]">{s.ms}ms</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -890,7 +1004,7 @@ export default function Dashboard() {
             <span className="text-[10px] text-[#333] tracking-widest">/ MISSION CONTROL</span>
           </div>
           <div className="h-4 w-px bg-[#1a1a1a]"></div>
-          {['live', 'analytics', 'customers', 'voice', 'impact'].map(tab => (
+          {['live', 'analytics', 'customers', 'guardrails', 'voice', 'impact'].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={cn('text-[11px] tracking-widest uppercase transition-colors px-1',
                 activeTab === tab ? 'text-emerald-400' : 'text-[#444] hover:text-[#666]'
@@ -1129,7 +1243,11 @@ export default function Dashboard() {
                 <p className="text-xs text-[#ccc] truncate">{c.name}</p>
                 {c.is_vip && <span className="text-[8px] text-amber-400 border border-amber-500/30 px-1 rounded flex-shrink-0">VIP</span>}
               </div>
-              <p className="text-[9px] font-mono flex-shrink-0" style={{color: col}}>{label}</p>
+              <p className="text-[9px] font-mono flex-shrink-0" style={{color: col}}>
+                {label}
+                {c.trend === 'improving' && <span className="text-emerald-400"> ↗ improving</span>}
+                {c.trend === 'declining' && <span className="text-red-400"> ↘ declining</span>}
+              </p>
               <p className="text-[9px] text-[#444] mt-0.5">{c.total_orders} orders · ₹{c.total_spent?.toLocaleString()}</p>
             </div>
           </div>
@@ -1152,7 +1270,8 @@ export default function Dashboard() {
         </thead>
         <tbody className="divide-y divide-[#0f0f0f]">
           {(data.customerHealthScores || []).map((c: any) => {
-            const sc = 50
+            const sc = c.factors?.sentimentEwma ?? 50
+            const scCol = sc > 60 ? '#10b981' : sc > 40 ? '#f59e0b' : '#ef4444'
             const healthCol = c.score > 70 ? '#10b981' : c.score > 45 ? '#f59e0b' : '#ef4444'
             return (
               <tr key={c.id} className="hover:bg-[#111] transition-colors">
@@ -1177,9 +1296,9 @@ export default function Dashboard() {
                 <td className="px-5 py-3.5">
                   <div className="flex items-center gap-2">
                     <div className="w-16 h-0.5 bg-[#1a1a1a] rounded overflow-hidden">
-                      <div className="h-full rounded" style={{width:`${sc}%`, background:'#888'}}></div>
+                      <div className="h-full rounded" style={{width:`${sc}%`, background: scCol}}></div>
                     </div>
-                    <span className="text-[10px] font-mono text-[#555]">{sc}</span>
+                    <span className="text-[10px] font-mono" style={{color: scCol}}>{sc}</span>
                   </div>
                 </td>
                 <td className="px-5 py-3.5">
@@ -1187,7 +1306,9 @@ export default function Dashboard() {
                     <div className="w-16 h-0.5 bg-[#1a1a1a] rounded overflow-hidden">
                       <div className="h-full rounded transition-all" style={{width:`${c.score}%`, background: healthCol}}></div>
                     </div>
-                    <span className="text-[10px] font-mono" style={{color: healthCol}}>{c.score}</span>
+                    <span className="text-[10px] font-mono" style={{color: healthCol}}>
+                      {c.score}{c.trend === 'improving' ? ' ↗' : c.trend === 'declining' ? ' ↘' : ''}
+                    </span>
                   </div>
                 </td>
               </tr>
@@ -1198,6 +1319,10 @@ export default function Dashboard() {
     </div>
   </div>
 )}
+
+      {activeTab === 'guardrails' && (
+        <GuardrailsTab guardrails={data.guardrails} agentTraces={data.agentTraces} stats={stats} />
+      )}
 
       {activeTab === 'voice' && <VoiceTab hotConv={hotConv} />}
 

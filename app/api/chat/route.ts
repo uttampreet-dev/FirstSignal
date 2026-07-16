@@ -1,120 +1,72 @@
-import { supabaseAdmin } from '@/lib/supabase'
-import { buildSystemPrompt } from '@/lib/system-prompt'
-import { analyzeSentiment } from '@/lib/sentiment'
-import { getMemories, extractAndSaveMemory } from '@/lib/memory'
-import { detectAction } from '@/lib/action-detector'
-import { processRefund, applyDiscount, markRedelivery, escalateToHuman } from '@/lib/resolution'
-import { detectLanguage, HINDI_SYSTEM_INSTRUCTION } from '@/lib/language-detector'
 import { NextResponse } from 'next/server'
+import { runPipeline, type PipelineEvent } from '@/lib/orchestrator'
+
+// Chat endpoint — thin wrapper around the agent orchestrator.
+// Send `Accept: text/event-stream` to stream the pipeline live: agent steps
+// appear as they execute and reply tokens arrive as they're generated,
+// followed by a final `done` event with the full result (trace, guardrails,
+// sentiment, action). Without that header it behaves as a plain JSON endpoint
+// (used by scripts and integrations).
+
+export const maxDuration = 60
 
 export async function POST(req: Request) {
+  let body: any
   try {
-    const { message, customerId, conversationId, brandId } = await req.json()
-
-    const { data: customer } = await supabaseAdmin.from('customers').select('*').eq('id', customerId).single()
-    if (!customer) return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
-
-    const { data: orders } = await supabaseAdmin.from('orders').select('*').eq('customer_id', customerId).order('created_at', { ascending: false }).limit(3)
-
-    let convId = conversationId
-    if (!convId) {
-      const { data: newConv } = await supabaseAdmin.from('conversations').insert({ customer_id: customerId }).select().single()
-      convId = newConv?.id
-    }
-
-    const { data: history } = await supabaseAdmin.from('messages').select('role, content').eq('conversation_id', convId).order('created_at', { ascending: true }).limit(20)
-
-    const [memories, sentimentResult] = await Promise.all([
-      getMemories(customerId, 5),
-      analyzeSentiment(message)
-    ])
-
-    const Groq = (await import('groq-sdk')).default
-    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! })
-
-    // Detect Hindi/Hinglish so the agent replies in the customer's language
-    const languageDetection = detectLanguage(message)
-    let systemPrompt = buildSystemPrompt(customer, orders || [], memories, brandId)
-    if (languageDetection.isHindi) {
-      systemPrompt += `\n\nLANGUAGE INSTRUCTION:\n${HINDI_SYSTEM_INSTRUCTION}`
-    }
-
-    const allMessages = [
-      { role: 'system' as const, content: systemPrompt },
-      ...(history || []).map((msg: any) => ({
-        role: msg.role === 'assistant' ? 'assistant' as const : 'user' as const,
-        content: msg.content
-      })),
-      { role: 'user' as const, content: message }
-    ]
-
-    const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: allMessages,
-      max_tokens: 1000
-    })
-
-    const aiReply = completion.choices[0].message.content || ''
-    const shouldEscalate = sentimentResult.score < 25 || sentimentResult.churnRisk
-
-    // Detect and execute action
-    const detectedAction = await detectAction(message, aiReply, sentimentResult)
-    let resolutionResult = null
-
-    if (detectedAction.action === 'process_refund' && orders?.[0]) {
-      resolutionResult = await processRefund(
-        customerId,
-        detectedAction.orderId || orders[0].order_number,
-        'Customer requested refund'
-      )
-    } else if (detectedAction.action === 'apply_discount') {
-      resolutionResult = await applyDiscount(
-        customerId,
-        detectedAction.discountPercentage || 15
-      )
-    } else if (detectedAction.action === 'mark_redelivery' && orders?.[0]) {
-      resolutionResult = await markRedelivery(
-        customerId,
-        detectedAction.orderId || orders[0].order_number
-      )
-    } else if (detectedAction.action === 'escalate_to_human' || shouldEscalate) {
-      resolutionResult = await escalateToHuman(
-        customerId,
-        convId,
-        detectedAction.reason || 'High frustration detected',
-        sentimentResult
-      )
-    }
-
-    // Save everything
-    await Promise.all([
-      supabaseAdmin.from('messages').insert({ conversation_id: convId, role: 'user', content: message, sentiment: sentimentResult.label }),
-      supabaseAdmin.from('messages').insert({ conversation_id: convId, role: 'assistant', content: aiReply }),
-      supabaseAdmin.from('conversations').update({
-        updated_at: new Date().toISOString(),
-        sentiment: sentimentResult.label,
-        sentiment_score: sentimentResult.score,
-        is_escalated: shouldEscalate,
-        resolution: resolutionResult?.message || null
-      }).eq('id', convId),
-      supabaseAdmin.from('customers').update({
-        sentiment_score: Math.round((customer.sentiment_score + sentimentResult.score) / 2)
-      }).eq('id', customerId),
-      extractAndSaveMemory(customerId, message, aiReply, sentimentResult)
-    ])
-
-    return NextResponse.json({
-      reply: aiReply,
-      conversationId: convId,
-      sentiment: sentimentResult,
-      isEscalated: shouldEscalate,
-      memoriesUsed: memories.length,
-      action: resolutionResult,
-      detectedLanguage: languageDetection.language
-    })
-
-  } catch (error) {
-    console.error('CHAT ERROR:', error)
-    return NextResponse.json({ error: 'Something went wrong', detail: error instanceof Error ? error.message : String(error) }, { status: 500 })
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
+
+  const { message, customerId, conversationId, brandId } = body
+  if (!message || !customerId) {
+    return NextResponse.json({ error: 'message and customerId are required' }, { status: 400 })
+  }
+
+  const wantsStream = (req.headers.get('accept') || '').includes('text/event-stream')
+
+  if (!wantsStream) {
+    try {
+      const result = await runPipeline({ message, customerId, conversationId, brandId })
+      return NextResponse.json(result)
+    } catch (error: any) {
+      return errorResponse(error)
+    }
+  }
+
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (obj: PipelineEvent | { type: 'done'; result: any } | { type: 'error'; message: string }) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`))
+      }
+      try {
+        const result = await runPipeline({ message, customerId, conversationId, brandId }, send)
+        send({ type: 'done', result })
+      } catch (error: any) {
+        console.error('CHAT STREAM ERROR:', error)
+        send({ type: 'error', message: error?.status === 404 ? 'Customer not found' : 'Something went wrong' })
+      }
+      controller.close()
+    }
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive'
+    }
+  })
+}
+
+function errorResponse(error: any) {
+  if (error?.status === 404) {
+    return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
+  }
+  console.error('CHAT ERROR:', error)
+  return NextResponse.json(
+    { error: 'Something went wrong', detail: error instanceof Error ? error.message : String(error) },
+    { status: 500 }
+  )
 }
