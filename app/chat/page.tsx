@@ -7,11 +7,20 @@ function cn(...c: string[]) { return c.filter(Boolean).join(' ') }
 
 export default function ChatPage() {
   const [brandId, setBrandId] = useState(DEFAULT_BRAND_ID)
+  const [resetting, setResetting] = useState(false)
   const brand = getBrand(brandId)
   const currentOrder = brand.sampleOrders[0]
 
   const statusColor = (status: string) =>
     status === 'Delayed' ? '#ef4444' : status === 'Delivered' ? '#10b981' : '#f59e0b'
+
+  // Clears the demo customer's history/memory and reloads — a clean slate for the next take
+  const resetDemo = async () => {
+    if (resetting) return
+    setResetting(true)
+    try { await fetch('/api/demo/reset-chat', { method: 'POST' }) } catch {}
+    window.location.reload()
+  }
 
   return (
     <div className="min-h-screen bg-[#080808] flex flex-col items-center p-6" style={{ fontFamily: 'monospace' }}>
@@ -44,12 +53,25 @@ export default function ChatPage() {
           })}
         </div>
 
-        {/* Serving X brands counter */}
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#0d0d0d] border border-[#141414] rounded-full">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-          <span className="text-[10px] text-[#888] font-mono">
-            Serving <span className="text-emerald-400">{BRANDS.length}</span> brands
-          </span>
+        <div className="flex items-center gap-2">
+          {/* Reset demo — clean slate between recording takes */}
+          <button
+            onClick={resetDemo}
+            disabled={resetting}
+            title="Reset the demo customer to a clean state"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border border-[#141414] text-[#444] hover:text-[#888] hover:border-[#222] transition-colors disabled:opacity-50"
+          >
+            <span className={cn('text-[10px]', resetting ? 'animate-spin' : '')}>↻</span>
+            <span className="text-[10px] font-mono uppercase tracking-widest">{resetting ? 'Resetting' : 'Reset'}</span>
+          </button>
+
+          {/* Serving X brands counter */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#0d0d0d] border border-[#141414] rounded-full">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+            <span className="text-[10px] text-[#888] font-mono">
+              Serving <span className="text-emerald-400">{BRANDS.length}</span> brands
+            </span>
+          </div>
         </div>
       </div>
 

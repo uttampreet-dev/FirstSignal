@@ -34,3 +34,40 @@ export async function cleanupDemoArtifacts() {
 
   return { conversationsRemoved: convIds.length }
 }
+
+// Chat demo customer — Priya Sharma (the /chat demo always uses this customer).
+const CHAT_CUSTOMER_ID = '11111111-1111-1111-1111-111111111111'
+const CHAT_ORDER = 'ORD-2847'
+
+// Resets the chat demo customer to a clean baseline so a fresh recording take
+// starts neutral: clears conversations/messages and accumulated memory, resets
+// sentiment, and puts her demo order back to a delayed state.
+export async function resetChatDemo() {
+  const { data: convs } = await supabaseAdmin
+    .from('conversations')
+    .select('id')
+    .eq('customer_id', CHAT_CUSTOMER_ID)
+
+  const convIds = (convs || []).map(c => c.id)
+  if (convIds.length) {
+    await supabaseAdmin.from('messages').delete().in('conversation_id', convIds)
+    await supabaseAdmin.from('conversations').delete().in('id', convIds)
+  }
+
+  await supabaseAdmin.from('memory_embeddings').delete().eq('customer_id', CHAT_CUSTOMER_ID)
+  await supabaseAdmin.from('customers').update({ sentiment_score: 50 }).eq('id', CHAT_CUSTOMER_ID)
+
+  // Observability tables (exist after the intelligence-upgrade migration; ignore errors if not)
+  await supabaseAdmin.from('agent_traces').delete().eq('customer_id', CHAT_CUSTOMER_ID)
+  await supabaseAdmin.from('guardrail_events').delete().eq('customer_id', CHAT_CUSTOMER_ID)
+  await supabaseAdmin.from('resolution_actions').delete().eq('customer_id', CHAT_CUSTOMER_ID)
+
+  const sixDaysAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString()
+  await supabaseAdmin
+    .from('orders')
+    .update({ status: 'delayed', expected_delivery: sixDaysAgo })
+    .eq('order_number', CHAT_ORDER)
+    .eq('customer_id', CHAT_CUSTOMER_ID)
+
+  return { conversationsRemoved: convIds.length }
+}
