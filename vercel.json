@@ -1,0 +1,7 @@
+{
+  "build": {
+    "env": {
+      "ONNXRUNTIME_NODE_INSTALL": "skip"
+    }
+  }
+}
