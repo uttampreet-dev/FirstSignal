@@ -18,6 +18,9 @@ async function getExtractor() {
 
 export const EMBEDDING_DIM = 384
 
+// Last load/inference failure — surfaced by the /api/test diagnostic.
+export let lastEmbeddingError: string | null = null
+
 // Returns a normalized 384-dim embedding, or null if the model can't load
 // (callers fall back to recency-based retrieval — the system degrades, never breaks).
 export async function embed(text: string): Promise<number[] | null> {
@@ -27,6 +30,8 @@ export async function embed(text: string): Promise<number[] | null> {
     return Array.from(output.data as Float32Array)
   } catch (err) {
     console.error('EMBEDDING ERROR (falling back to recency retrieval):', err)
+    lastEmbeddingError = err instanceof Error ? `${err.message} | ${err.stack?.split('\n').slice(0, 4).join(' ')}` : String(err)
+    extractorPromise = null // allow retry on next call rather than caching a rejection
     return null
   }
 }
