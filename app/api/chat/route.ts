@@ -45,7 +45,11 @@ export async function POST(req: Request) {
         send({ type: 'done', result })
       } catch (error: any) {
         console.error('CHAT STREAM ERROR:', error)
-        send({ type: 'error', message: error?.status === 404 ? 'Customer not found' : 'Something went wrong' })
+        if (isRateLimit(error)) {
+          send({ type: 'done', result: rateLimitResult(conversationId) })
+        } else {
+          send({ type: 'error', message: error?.status === 404 ? 'Customer not found' : 'Something went wrong' })
+        }
       }
       controller.close()
     }
@@ -64,9 +68,35 @@ function errorResponse(error: any) {
   if (error?.status === 404) {
     return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
   }
+  if (isRateLimit(error)) {
+    return NextResponse.json(rateLimitResult(null))
+  }
   console.error('CHAT ERROR:', error)
   return NextResponse.json(
     { error: 'Something went wrong', detail: error instanceof Error ? error.message : String(error) },
     { status: 500 }
   )
+}
+
+function isRateLimit(error: any) {
+  return error?.status === 429 || /rate.?limit/i.test(String(error?.message || ''))
+}
+
+// LLM capacity exhausted — degrade to a human-sounding reply instead of a 500,
+// so a busy live demo never shows a raw error to the customer.
+function rateLimitResult(conversationId: string | null) {
+  return {
+    reply: "I'm handling a surge of conversations right now — please give me just a minute and send that again. Your conversation is safe with me.",
+    conversationId,
+    sentiment: null,
+    isEscalated: false,
+    memoriesUsed: 0,
+    memoryMode: 'recency',
+    action: null,
+    guardrails: [],
+    injectionFlagged: false,
+    detectedLanguage: 'english',
+    trace: { steps: [{ agent: 'System', decision: 'LLM capacity limit hit — replied with a hold message, no state changed', ms: 0 }], totalMs: 0 },
+    rateLimited: true
+  }
 }
