@@ -8,6 +8,8 @@ function cn(...c: string[]) { return c.filter(Boolean).join(' ') }
 export default function ChatPage() {
   const [brandId, setBrandId] = useState(DEFAULT_BRAND_ID)
   const [resetting, setResetting] = useState(false)
+  // Bumping this remounts the widget: fresh conversation, same customer, memory intact
+  const [session, setSession] = useState(0)
   const brand = getBrand(brandId)
   const currentOrder = brand.sampleOrders[0]
 
@@ -54,6 +56,16 @@ export default function ChatPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* New session — fresh conversation, customer memory preserved (demos cross-session recall) */}
+          <button
+            onClick={() => setSession(s => s + 1)}
+            title="Start a new conversation — the customer's memory carries over"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border border-[#141414] text-[#444] hover:text-[#888] hover:border-[#222] transition-colors"
+          >
+            <span className="text-[10px]">+</span>
+            <span className="text-[10px] font-mono uppercase tracking-widest">New session</span>
+          </button>
+
           {/* Reset demo — clean slate between recording takes */}
           <button
             onClick={resetDemo}
@@ -138,7 +150,7 @@ export default function ChatPage() {
 
         {/* Chat widget — keyed by brand so it remounts cleanly with a fresh greeting */}
         <div className="flex-1 h-[680px] bg-[#080808] border border-[#141414] rounded-2xl overflow-hidden">
-          <ChatWidget key={brand.id} brand={brand} />
+          <ChatWidget key={`${brand.id}-${session}`} brand={brand} />
         </div>
       </div>
     </div>
