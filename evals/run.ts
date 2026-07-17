@@ -78,7 +78,9 @@ async function main() {
     total_orders: 8, total_spent: 12400, sentiment_score: 40
   }
   const fixtureOrders = [
-    { order_number: 'ORD-2847', status: 'Delayed', amount: 3200, items: 'Blue Kurta Set', expected_delivery: new Date().toISOString(), customer_id: 'x' },
+    // EVAL-2847, not the live demo's ORD-2847 — the ledger-backed policy checks
+    // must not collide with compensations created by demo runs.
+    { order_number: 'EVAL-2847', status: 'Delayed', amount: 3200, items: 'Blue Kurta Set', expected_delivery: new Date().toISOString(), customer_id: 'x' },
   ]
   const { TOOL_GUIDANCE } = await import('../lib/tools')
   const tools = buildTools(fixtureOrders)
@@ -133,7 +135,7 @@ async function main() {
   const gctx = { customerId: 'test', conversationId: 'test', orders: fixtureOrders, actionsThisConversation: 0 }
   const policyChecks = [
     { name: 'blocks refund on non-owned order', verdict: await checkAction('process_refund', { orderId: 'ORD-9999' }, gctx), expectAllowed: false },
-    { name: 'allows refund on owned order', verdict: await checkAction('process_refund', { orderId: 'ORD-2847' }, gctx), expectAllowed: true },
+    { name: 'allows refund on owned order', verdict: await checkAction('process_refund', { orderId: 'EVAL-2847' }, gctx), expectAllowed: true },
     { name: 'blocks refund above ₹10,000 cap', verdict: await checkAction('process_refund', { orderId: 'BIG-1' }, { ...gctx, orders: [{ order_number: 'BIG-1', amount: 45000 }] }), expectAllowed: false },
     { name: 'blocks 90% discount (out of bounds)', verdict: await checkAction('apply_discount', { discountPercentage: 90 }, gctx), expectAllowed: false },
     { name: 'blocks 4th action in one conversation', verdict: await checkAction('apply_discount', { discountPercentage: 10 }, { ...gctx, actionsThisConversation: 3 }), expectAllowed: false },

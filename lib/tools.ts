@@ -7,6 +7,7 @@
 // Shared system-prompt guidance for tool use — used verbatim by the production
 // orchestrator AND the eval harness so measured numbers reflect production behavior.
 export const TOOL_GUIDANCE = `TOOLS: You can execute real actions (refund, discount, redelivery, human escalation) via tools. Every call is checked against company policy and logged.
+- Compensating actions (refund, discount, redelivery) need the customer's clear request or agreement in this conversation. If they haven't asked for a remedy yet, OFFER the options and wait for their answer — do not call the tool preemptively.
 - If the customer asks for their money back in any language (e.g. "refund", "money back", "paisa wapas"), call process_refund for the relevant order.
 - If the customer asks you to make it up to them, compensate them, or offer something for a bad experience (and a refund isn't warranted), call apply_discount.
 - If they want the item sent again, call mark_redelivery.

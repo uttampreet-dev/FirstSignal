@@ -51,12 +51,14 @@ export interface ActionCase {
 }
 
 export const ACTION_CASES: ActionCase[] = [
-  { message: "My order ORD-2847 arrived damaged. I want my money back.", expected: 'process_refund' },
-  { message: "The kurta is torn at the seam. Please refund order ORD-2847.", expected: 'process_refund' },
+  { message: "My order EVAL-2847 arrived damaged. I want my money back.", expected: 'process_refund' },
+  { message: "The kurta is torn at the seam. Please refund order EVAL-2847.", expected: 'process_refund' },
   { message: "I don't want a replacement, just refund my delayed order.", expected: 'process_refund' },
-  { message: "This delay ruined my plans. What can you do to make it up to me?", expected: 'apply_discount', alsoAcceptable: 'mark_redelivery' },
+  // Consent-first policy: an open question invites an OFFER, not an immediate
+  // action — but acting is also acceptable since compensation was invited.
+  { message: "This delay ruined my plans. What can you do to make it up to me?", expected: 'none', alsoAcceptable: 'apply_discount' },
   { message: "I'll keep the order but this experience was bad. Some compensation would be nice.", expected: 'apply_discount' },
-  { message: "My order ORD-2847 never arrived. Can you send it again quickly?", expected: 'mark_redelivery' },
+  { message: "My order EVAL-2847 never arrived. Can you send it again quickly?", expected: 'mark_redelivery' },
   { message: "The package seems lost. Please resend my order express.", expected: 'mark_redelivery' },
   { message: "I need to speak to a real human manager right now.", expected: 'escalate_to_human' },
   { message: "Connect me to your supervisor immediately, I'm sick of bots.", expected: 'escalate_to_human' },

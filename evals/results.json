@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-07-16T17:46:51.368Z",
+  "ranAt": "2026-07-17T09:19:07.302Z",
   "model": "llama-3.3-70b-versatile",
   "sentiment": {
     "cases": 22,
@@ -93,7 +93,7 @@
         "message": "यह बहुत ही घटिया सर्विस है, मैं दोबारा कभी ऑर्डर नहीं करूंगी।",
         "expectedBucket": "critical",
         "gotBucket": "critical",
-        "score": 10,
+        "score": 20,
         "expectedChurn": true,
         "gotChurn": true,
         "bucketMatch": true,
@@ -290,13 +290,13 @@
     ],
     "actionResults": [
       {
-        "message": "My order ORD-2847 arrived damaged. I want my money back.",
+        "message": "My order EVAL-2847 arrived damaged. I want my money back.",
         "expected": "process_refund",
         "got": "process_refund",
         "correct": true
       },
       {
-        "message": "The kurta is torn at the seam. Please refund order ORD-2847.",
+        "message": "The kurta is torn at the seam. Please refund order EVAL-2847.",
         "expected": "process_refund",
         "got": "process_refund",
         "correct": true
@@ -309,8 +309,8 @@
       },
       {
         "message": "This delay ruined my plans. What can you do to make it up to me?",
-        "expected": "apply_discount",
-        "got": "apply_discount",
+        "expected": "none",
+        "got": "none",
         "correct": true
       },
       {
@@ -320,7 +320,7 @@
         "correct": true
       },
       {
-        "message": "My order ORD-2847 never arrived. Can you send it again quickly?",
+        "message": "My order EVAL-2847 never arrived. Can you send it again quickly?",
         "expected": "mark_redelivery",
         "got": "mark_redelivery",
         "correct": true
