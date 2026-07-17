@@ -2,6 +2,7 @@
 
 import SectionHeading from './SectionHeading'
 import { Reveal, Num } from './Reveal'
+import { ROI_MULTIPLE } from '@/lib/impact'
 
 const MEASURES = [
   { v: <Num to={740} suffix="ms" />, k: 'Median time to action' },
@@ -37,7 +38,7 @@ export default function Proof() {
           <p className="text-center font-mono text-[clamp(1rem,1.8vw,1.35rem)] leading-relaxed text-emerald-400">
             For every ₹1 spent on FirstSignal, D2C brands recover{' '}
             <span className="font-semibold">
-              ₹<Num to={23} />
+              ₹<Num to={ROI_MULTIPLE} />
             </span>{' '}
             in retained customer value.
           </p>

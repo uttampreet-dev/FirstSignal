@@ -4,6 +4,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, 
 import VoiceDemo from '@/components/VoiceDemo'
 import { supabase } from '@/lib/supabase'
 import DemoTour, { type TourStep } from '@/components/DemoTour'
+import { ROI_MULTIPLE } from '@/lib/impact'
 
 const TOUR_STEPS: TourStep[] = [
   {
@@ -475,7 +476,7 @@ function ImpactTab({ stats, actions }: any) {
   const revenueProtected = (stats.estimatedCostSaved || 0) * 12
   const agentHoursSaved = Math.round((stats.resolvedConversations || 0) * 0.4 + (stats.proactiveConversations || 0) * 0.6)
   const churnPrevented = (stats.escalatedConversations || 0) + (stats.proactiveConversations || 0)
-  const roiMultiple = Math.round((stats.estimatedCostSaved || 0) / 100)
+  const roiMultiple = ROI_MULTIPLE // shared with the landing page (lib/impact.ts)
 
   const heroCards = [
     { label: 'Revenue Protected', value: `₹${revenueProtected.toLocaleString()}`, sub: 'Annualized retention value', color: '#10b981' },
