@@ -1,4 +1,5 @@
 import Groq from 'groq-sdk'
+import { MODEL } from '@/lib/llm'
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! })
 
@@ -9,7 +10,7 @@ export async function analyzeSentiment(message: string): Promise<{
   buyingIntent: boolean
 }> {
   const completion = await groq.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
+    model: MODEL,
     messages: [
       {
         role: 'system',
@@ -24,15 +25,24 @@ Customers may write in Hindi or Hinglish — interpret meaning, not just keyword
       },
       { role: 'user', content: message }
     ],
-    max_tokens: 100,
+    max_tokens: 300,
     temperature: 0.1
   })
 
+  const fallback = { score: 50, label: 'neutral' as const, churnRisk: false, buyingIntent: false }
   try {
     const text = completion.choices[0].message.content || '{}'
-    const clean = text.replace(/```json|```/g, '').trim()
-    return JSON.parse(clean)
+    // Extract the first JSON object — tolerates fences, prose, or reasoning text around it
+    const json = text.match(/\{[\s\S]*\}/)?.[0] ?? '{}'
+    const parsed = JSON.parse(json)
+    if (typeof parsed.score !== 'number') return fallback
+    return {
+      score: Math.max(0, Math.min(100, Math.round(parsed.score))),
+      label: parsed.label ?? 'neutral',
+      churnRisk: Boolean(parsed.churnRisk),
+      buyingIntent: Boolean(parsed.buyingIntent)
+    }
   } catch {
-    return { score: 50, label: 'neutral', churnRisk: false, buyingIntent: false }
+    return fallback
   }
 }

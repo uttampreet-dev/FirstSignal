@@ -40,6 +40,7 @@ async function main() {
   const { buildTools, parseToolCalls } = await import('../lib/tools')
   const { scanForInjection, checkAction } = await import('../lib/guardrails')
   const { buildSystemPrompt } = await import('../lib/system-prompt')
+  const { MODEL } = await import('../lib/llm')
   const Groq = (await import('groq-sdk')).default
   const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! })
 
@@ -89,7 +90,7 @@ async function main() {
 
   const actionResults = await runBatched(ACTION_CASES, 3, async (c) => {
     const completion = await withRetry(() => groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: c.message }
@@ -150,7 +151,7 @@ async function main() {
 
   const summary = {
     ranAt: new Date().toISOString(),
-    model: 'llama-3.3-70b-versatile',
+    model: MODEL,
     sentiment: {
       cases: SENTIMENT_CASES.length,
       bucketAccuracy: +(bucketAcc * 100).toFixed(1),

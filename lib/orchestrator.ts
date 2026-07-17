@@ -7,12 +7,11 @@ import { buildTools, parseToolCalls, TOOL_GUIDANCE, type ProposedAction } from '
 import { scanForInjection, checkAction, logGuardrailEvent, POLICY } from '@/lib/guardrails'
 import { processRefund, applyDiscount, markRedelivery, escalateToHuman, type ResolutionResult } from '@/lib/resolution'
 import { detectLanguage, HINDI_SYSTEM_INSTRUCTION } from '@/lib/language-detector'
+import { MODEL } from '@/lib/llm'
 
 // Orchestrator — coordinates every agent on each customer message and records
 // a full decision trace: what each agent saw, what it decided, and how long it
 // took. The trace is returned to the chat UI and persisted to agent_traces.
-
-const MODEL = 'llama-3.3-70b-versatile'
 
 export interface TraceStep {
   agent: string

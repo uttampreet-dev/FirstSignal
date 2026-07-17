@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase'
 import Groq from 'groq-sdk'
 import { NextResponse } from 'next/server'
+import { MODEL } from '@/lib/llm'
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! })
 
@@ -57,7 +58,7 @@ export async function POST(req: Request) {
 
     // Generate AI summary
     const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: MODEL,
       messages: [
         {
           role: 'system',
