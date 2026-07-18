@@ -23,11 +23,7 @@ An AI-powered customer intelligence platform that helps D2C brands identify at-r
 
 **Mission Control Dashboard:** https://first-signal-six.vercel.app/dashboard
 
-<p align="center">
-  <a href="https://first-signal-six.vercel.app">
-    <img src="public/demo.gif" width="800" alt="FirstSignal Demo">
-  </a>
-</p>
+> **60-second tour:** open the [dashboard](https://first-signal-six.vercel.app/dashboard) and click **Guided Demo** — an auto-played walkthrough of every feature. Or try to jailbreak [Aria](https://first-signal-six.vercel.app/chat) yourself and watch the Guardrails tab catch you.
 
 ---
 
